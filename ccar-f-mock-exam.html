@@ -197,6 +197,9 @@ select { font: inherit; font-size: 16px; padding: 5px 10px; border: 1px solid va
 .ro .wrongpick.elim { background: var(--bad-soft); border: 1px solid var(--bad); }
 .ro .elimnote { grid-column: 2 / -1; }
 .ro .wrongpick .elimnote { color: var(--bad); }
+.opt.right:not(.sel) { background: var(--good-soft); border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+.opt.right:not(.sel) .ltr { background: var(--good); border-color: var(--good); color: var(--accent-ink); }
+.rightnote { grid-column: 2; font-size: 16px; line-height: 1.45; font-weight: 700; color: var(--good); }
 .hintnote { background: var(--warn-soft); color: var(--warn); display: inline-block; padding: 3px 12px; border-radius: 6px; font-size: 16px; margin-top: 8px; font-weight: 600; }
 
 .sheetx h2 { font-size: 22px; margin-bottom: 4px; }
@@ -3443,8 +3446,8 @@ function setStatus(id) {
 let S = load() || fresh();
 applyOrder();
 let timerId = null, modal = false, mapOpen = false, reviewFilter = "all", reviewDomain = "0", confirmDiscard = false;
-let hints = true;
-try { hints = localStorage.getItem("ccarf-hints") !== "0"; } catch (e) {}
+let hints = false;
+try { hints = localStorage.getItem("ccarf-hints") === "1"; } catch (e) {}
 function setHints(on) { hints = on; try { localStorage.setItem("ccarf-hints", on ? "1" : "0"); } catch (e) {} }
 function elimOf(q, o) { const id = setId === 1 ? (ELIM_TAGS[SET_BY_ID[1].Q.indexOf(QUESTIONS[q])] || {})[o] : (QUESTIONS[q].x || {})[o]; return id ? ELIM[id] : null; }
 function sheetBody() {
@@ -3538,7 +3541,7 @@ function startView() {
     </div>
     ${history().length ? `<section class="card"><h2>Lịch sử điểm</h2><div class="tblwrap"><table class="tbl hist"><tr><th>Ngày</th><th>Đề</th><th>Điểm</th><th>Đúng</th><th>Thời gian</th><th>Gợi ý loại</th></tr>${[...history()].reverse().slice(0, 12).map(h => `<tr><td>${new Date(h.at).toLocaleDateString("vi-VN")}</td><td>${h.set}</td><td>${h.scaled}</td><td>${h.correct}/60</td><td>${Math.round(h.ms / 60000)} phút</td><td>${h.hint ? "Có" : "Không"}</td></tr>`).join("")}</table></div></section>` : ""}
     <section class="sheetx"><h2>Từ cần loại</h2>
-      <p class="sub">Đáp án sai thường có dấu hiệu lặp lại. Khi bật gợi ý, đáp án khớp một mẫu dưới đây được tô xám, viền nét đứt, kèm lý do loại. Mỗi mẫu đã được gắn tay cho từng đáp án sai, nên đáp án đúng không bao giờ bị tô. Tổng hợp từ <a href="https://knowt.com/flashcards/abea3075-c183-4001-a21d-3f4b8fb7120e">bộ flashcard Từ Cần Loại</a>.</p>
+      <p class="sub">Đáp án sai thường có dấu hiệu lặp lại. Khi bật gợi ý, đáp án đúng được tô xanh và ghi "Đáp án đúng"; đáp án sai khớp một mẫu dưới đây được tô xám, viền nét đứt, kèm lý do loại. Mỗi mẫu đã được gắn tay cho từng đáp án sai, nên đáp án đúng không bao giờ bị tô. Tổng hợp từ <a href="https://knowt.com/flashcards/abea3075-c183-4001-a21d-3f4b8fb7120e">bộ flashcard Từ Cần Loại</a>.</p>
       ${sheetBody()}
     </section>
   </main>`;
@@ -3559,10 +3562,11 @@ function examView() {
   const q = QUESTIONS[S.cur], sc = SCENARIOS[q.s], sel = S.answers[S.cur] || [], want = q.a.length, multi = want > 1, c = counts();
   const full = multi && sel.length >= want;
   const opts = S.perm[S.cur].map((orig, shown) => {
-    const on = sel.includes(orig), off = full && !on, tag = hints ? elimOf(S.cur, orig) : null;
-    return `<label class="opt ${multi ? "multi" : ""} ${on ? "sel" : ""} ${off ? "off" : ""} ${tag ? "elim" : ""}" for="o${orig}">
+    const on = sel.includes(orig), off = full && !on, right = hints && q.a.includes(orig), tag = hints && !right ? elimOf(S.cur, orig) : null;
+    return `<label class="opt ${multi ? "multi" : ""} ${on ? "sel" : ""} ${off ? "off" : ""} ${tag ? "elim" : ""} ${right ? "right" : ""}" for="o${orig}">
       <input type="${multi ? "checkbox" : "radio"}" name="ans" id="o${orig}" data-opt="${orig}" ${on ? "checked" : ""} ${off ? "disabled" : ""}>
       <span class="ltr">${LETTERS[shown]}</span><span>${fmt(q.o[orig])}</span>
+      ${right ? `<span class="rightnote">Đáp án đúng</span>` : ""}
       ${tag ? `<span class="elimnote">Loại: ${fmt(tag.t)}. ${fmt(tag.why)}</span>` : ""}</label>`;
   }).join("");
   const instr = multi ? `Select ${COUNT[want]}.` : "Select ONE.";
@@ -3648,7 +3652,7 @@ function resultView() {
         <div><span class="tag ${R.passed ? "pass" : "fail"}">${R.passed ? "ĐẠT" : "CHƯA ĐẠT"}</span>
           <p class="facts">Đúng ${R.correct}/60 · sai ${wrong} · bỏ trống ${blank} · thời gian ${clock(usedMs)}</p>
           <p class="facts">${R.passed ? "Điểm đã vượt mốc 720." : `Cần thêm ${42 - R.correct} câu đúng để đạt mốc 720.`} Đây là điểm ước lượng theo công thức tuyến tính.</p>
-          ${S.hintUsed ? `<p class="hintnote">Lượt này có bật gợi ý loại, nên điểm cao hơn so với thi thật.</p>` : ""}</div>
+          ${S.hintUsed ? `<p class="hintnote">Lượt này có bật gợi ý nên đã thấy đáp án; điểm này không phản ánh thực lực.</p>` : ""}</div>
         <div class="scale" role="img" aria-label="Điểm ${R.scaled}, mốc đạt 720">
           <div class="track"></div><div class="fill" style="width:${pos}%"></div>
           <div class="tick" style="left:${(PASS - 100) / 9}%"></div>
