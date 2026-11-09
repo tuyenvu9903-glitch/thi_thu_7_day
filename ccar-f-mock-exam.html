@@ -214,6 +214,11 @@ select { font: inherit; font-size: 16px; padding: 5px 10px; border: 1px solid va
 details.sheetx > summary { cursor: pointer; font: 600 20px var(--display); }
 details.sheetx[open] > summary { margin-bottom: 8px; }
 .dlmsg { color: var(--muted); font-size: 16px; }
+.sync .sub { color: var(--muted); max-width: 72ch; margin-bottom: 14px; }
+.sync textarea { display: block; width: 100%; min-height: 84px; margin-top: 12px; padding: 10px 12px; font: 400 14px/1.4 var(--mono); color: var(--ink); background: var(--sunken); border: 1px solid var(--line2); border-radius: 8px; resize: vertical; word-break: break-all; }
+.sync .syncmsg { margin-top: 10px; font-size: 16px; color: var(--muted); }
+.sync .syncmsg.ok { color: var(--good); }
+.sync .syncmsg.err { color: var(--bad); }
 
 @media (max-width: 860px) {
   .erow { grid-template-columns: minmax(0, 1fr); }
@@ -3515,6 +3520,7 @@ function startView() {
     </div></div>
     <main class="wrap start">
     <section><h2>Chọn đề</h2><div class="setgrid">${SETS.map(x => { const st = setStatus(x.id); return `<button class="setcard" data-set="${x.id}" aria-pressed="${x.id === setId}"><b>Đề ${x.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${scenOrder(x.Q).map(k => SCEN_SHORT[k]).join(" · ")}</span></button>`; }).join("")}</div></section>
+    ${syncView()}
     <div class="cols">
       <section><h2>Cấu trúc bài thi</h2>
         <table class="tbl">
@@ -3678,6 +3684,111 @@ function resultView() {
   </main>`;
 }
 
+/* Progress lives only in this browser's localStorage, so another device starts empty. These helpers move it between devices: a link (data in the #hash, never sent to the server), a pasted code, or a .json file. Importing merges: per set the newer attempt wins, score history is united. */
+let syncMsg = { cls: "", text: "" }, syncOut = "", pasteOpen = false;
+const SYNC_PREFIX = "ccarf-", SET_KEY_RE = /^ccarf-mock-v1(-s\d+)?$/;
+function syncSnapshot() {
+  const data = {};
+  try { for (let i = 0; i < localStorage.length; i++) { const k = localStorage.key(i); if (k && k.startsWith(SYNC_PREFIX)) data[k] = localStorage.getItem(k); } } catch (e) {}
+  return { app: "ccar-f-mock", v: 1, at: Date.now(), data };
+}
+function b64u(bytes) { let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000)); return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, ""); }
+function unb64u(str) { const s = atob(str.replace(/-/g, "+").replace(/_/g, "/") + "===".slice((str.length + 3) % 4)); const b = new Uint8Array(s.length); for (let i = 0; i < s.length; i++) b[i] = s.charCodeAt(i); return b; }
+async function streamThrough(bytes, ts) { return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(ts)).arrayBuffer()); }
+async function packCode() {
+  const bytes = new TextEncoder().encode(JSON.stringify(syncSnapshot()));
+  if (window.CompressionStream) { try { return "z" + b64u(await streamThrough(bytes, new CompressionStream("deflate-raw"))); } catch (e) {} }
+  return "j" + b64u(bytes);
+}
+async function unpackCode(raw) {
+  let s = String(raw || "").trim();
+  if (s.startsWith("{")) return JSON.parse(s);
+  const at = s.indexOf("#sync="); if (at >= 0) s = s.slice(at + 6);
+  s = s.replace(/\s+/g, "");
+  if (!s) throw new Error("empty");
+  const kind = s[0], bytes = unb64u(s.slice(1));
+  if (kind === "z") return JSON.parse(new TextDecoder().decode(await streamThrough(bytes, new DecompressionStream("deflate-raw"))));
+  if (kind === "j") return JSON.parse(new TextDecoder().decode(bytes));
+  throw new Error("format");
+}
+function parseJson(s) { try { return JSON.parse(s); } catch (e) { return null; } }
+function attemptRank(s) { return [s.startedAt || 0, s.phase === "result" ? 2 : s.phase === "exam" ? 1 : 0, s.endedAt || 0, Object.values(s.answers || {}).filter(x => x && x.length).length]; }
+function newerAttempt(a, b) { /* true when b should replace a */
+  if (!b || !b.phase) return false; if (!a || !a.phase) return true;
+  const ra = attemptRank(a), rb = attemptRank(b);
+  for (let i = 0; i < ra.length; i++) if (ra[i] !== rb[i]) return rb[i] > ra[i];
+  return false;
+}
+function mergeSnapshot(snap) {
+  if (!snap || typeof snap.data !== "object" || !snap.data) throw new Error("format");
+  const inc = snap.data; let sets = 0, added = 0;
+  for (const [k, v] of Object.entries(inc)) {
+    if (!k.startsWith(SYNC_PREFIX) || typeof v !== "string") continue;
+    const cur = localStorage.getItem(k);
+    if (SET_KEY_RE.test(k)) {
+      if (newerAttempt(parseJson(cur), parseJson(v))) { localStorage.setItem(k, v); sets++; }
+    } else if (k === "ccarf-history") {
+      const all = [...(parseJson(cur) || []), ...(parseJson(v) || [])].filter(h => h && h.at);
+      const seen = new Set(), merged = all.sort((x, y) => x.at - y.at).filter(h => { const id = `${h.set}|${h.at}`; if (seen.has(id)) return false; seen.add(id); return true; }).slice(-40);
+      added = merged.length - (parseJson(cur) || []).length;
+      localStorage.setItem(k, JSON.stringify(merged));
+    } else if (k === "ccarf-current-set" || cur === null) {
+      localStorage.setItem(k, v);
+    }
+  }
+  return { sets, added: Math.max(0, added) };
+}
+function reloadState() {
+  try { const v = +localStorage.getItem("ccarf-current-set"); if (SET_BY_ID[v]) setId = v; } catch (e) {}
+  try { hints = localStorage.getItem("ccarf-hints") === "1"; } catch (e) {}
+  S = load() || fresh(); applyOrder();
+  modal = false; mapOpen = false; confirmDiscard = false; reviewFilter = "all"; reviewDomain = "0";
+  if (S.phase !== "start") app.dataset.home = "1"; else delete app.dataset.home;
+}
+async function importCode(raw) {
+  try {
+    const r = mergeSnapshot(await unpackCode(raw));
+    reloadState(); pasteOpen = false; syncOut = "";
+    syncMsg = { cls: "ok", text: r.sets || r.added
+      ? `Đã nhập tiến độ: cập nhật ${r.sets} đề, thêm ${r.added} lượt vào lịch sử điểm.`
+      : "Đã nhập. Máy này đã có tiến độ mới bằng hoặc hơn nên không có gì thay đổi." };
+  } catch (e) {
+    syncMsg = { cls: "err", text: "Không đọc được link, mã hoặc file tiến độ. Hãy kiểm tra đã sao chép đủ chưa rồi thử lại." };
+  }
+  render();
+}
+async function makeLink() {
+  try {
+    const code = await packCode();
+    syncOut = `${location.origin}${location.pathname}#sync=${code}`;
+    let copied = false;
+    try { await navigator.clipboard.writeText(syncOut); copied = true; } catch (e) {}
+    syncMsg = { cls: "ok", text: copied
+      ? "Đã sao chép link. Gửi link cho chính bạn (Zalo, email…) rồi mở trên máy kia là tiến độ được nạp vào."
+      : "Hãy sao chép link bên dưới, gửi cho chính bạn rồi mở trên máy kia." };
+  } catch (e) { syncMsg = { cls: "err", text: "Không tạo được link trên trình duyệt này. Hãy dùng Tải file tiến độ." }; }
+  render(); const el = document.getElementById("syncout"); if (el) { el.focus(); el.select(); }
+}
+async function saveProgressFile() {
+  const filename = `ccar-f-tien-do-${new Date().toLocaleDateString("sv")}.json`, data = JSON.stringify(syncSnapshot());
+  try {
+    if (dl) await dl.save({ filename, data });
+    else { const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([data], { type: "application/json" })); a.download = filename; document.body.appendChild(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000); }
+    syncMsg = { cls: "ok", text: `Đã tải ${filename}. Trên máy kia, bấm Nhập file tiến độ và chọn file này.` };
+  } catch (e) { syncMsg = { cls: "err", text: "Không tải được file tiến độ. Hãy dùng Tạo link chuyển tiến độ." }; }
+  render();
+}
+function syncView() {
+  return `<section class="card sync"><h2>Chuyển tiến độ sang máy khác</h2>
+    <p class="sub">Tiến độ (bài đang làm, kết quả các đề, lịch sử điểm) chỉ lưu trong trình duyệt này, nên máy khác mở trang sẽ không thấy. Tạo link chuyển rồi mở link đó trên máy kia, hoặc tải file tiến độ rồi nhập trên máy kia. Khi nhập, với mỗi đề bài mới hơn được giữ lại và lịch sử điểm được gộp, nên không mất dữ liệu ở máy nhận.</p>
+    <div class="actions"><button class="btn" id="synclink">Tạo link chuyển tiến độ</button><button class="btn" id="syncsave">Tải file tiến độ</button><button class="btn" id="syncopen">Nhập file tiến độ</button><button class="btn ghost" id="syncpaste">Dán link hoặc mã</button></div>
+    <input type="file" id="syncfile" accept=".json,.txt,application/json,text/plain" hidden>
+    ${syncOut ? `<textarea id="syncout" readonly aria-label="Link chuyển tiến độ">${esc(syncOut)}</textarea>` : ""}
+    ${pasteOpen ? `<textarea id="syncin" placeholder="Dán link hoặc mã tiến độ vào đây" aria-label="Link hoặc mã tiến độ"></textarea>
+      <div class="actions" style="margin-top:10px"><button class="btn primary" id="syncdo">Nhập tiến độ</button><button class="btn ghost" id="synccancel">Hủy</button></div>` : ""}
+    <p class="syncmsg ${syncMsg.cls}" role="status">${esc(syncMsg.text)}</p></section>`;
+}
+
 let dl = null;
 function statusOf(x) { return x.ok ? "Đúng" : x.blank ? "Bỏ trống" : "Sai"; }
 function lettersOf(i, origs) { return origs.map(o => LETTERS[S.perm[i].indexOf(o)]).sort().join(", "); }
@@ -3771,17 +3882,30 @@ app.addEventListener("click", e => {
     case "maptoggle": mapOpen = !mapOpen; return render();
     case "xhtml": return exportFile("html");
     case "xcsv": return exportFile("csv");
+    case "synclink": return makeLink();
+    case "syncsave": return saveProgressFile();
+    case "syncopen": document.getElementById("syncfile")?.click(); return;
+    case "syncpaste": pasteOpen = !pasteOpen; syncOut = ""; render(); document.getElementById("syncin")?.focus(); return;
+    case "synccancel": pasteOpen = false; return render();
+    case "syncdo": return importCode(document.getElementById("syncin")?.value);
     case "again": delete app.dataset.home; S = fresh(); applyOrder(); save(); app.dataset.home = "1"; render(); window.scrollTo(0, 0); return;
   }
 });
 app.addEventListener("change", e => {
   if (e.target.dataset.opt !== undefined) return toggle(+e.target.dataset.opt);
   if (e.target.id === "dom") { reviewDomain = e.target.value; render(); }
+  if (e.target.id === "syncfile" && e.target.files[0]) { e.target.files[0].text().then(importCode, () => importCode("")); }
 });
 document.addEventListener("keydown", e => { if (e.key === "Escape" && modal) { modal = false; render(); } });
 
 if (S.phase !== "start") app.dataset.home = "1";
 render();
+if (location.hash.startsWith("#sync=")) {
+  const code = location.hash.slice(6);
+  /* window.history is shadowed by the page's history() function, so clear the hash with location.replace (no reload). */
+  try { location.replace("#"); } catch (e) {}
+  importCode(code).then(() => document.querySelector(".sync")?.scrollIntoView({ block: "center" }));
+}
 (async () => {
   try { dl = await window.claude?.use("downloads"); } catch (e) { dl = null; }
   if (dl && S.phase === "result") render();
