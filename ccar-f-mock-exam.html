@@ -3416,26 +3416,37 @@ function scenOrder(Q = QUESTIONS) { return [...new Set(Q.map(q => q.s))]; }
 function history() { try { const v = JSON.parse(localStorage.getItem("ccarf-history")); return Array.isArray(v) ? v : []; } catch (e) { return []; } }
 function selectSet(id) {
   if (!SET_BY_ID[id] || id === setId) return;
-  setId = id; QUESTIONS = SET_BY_ID[id].Q; S = load() || fresh();
+  setId = id; S = load() || fresh(); applyOrder();
   modal = false; mapOpen = false; confirmDiscard = false; reviewFilter = "all"; reviewDomain = "0";
   try { localStorage.setItem("ccarf-current-set", String(id)); } catch (e) {}
   render();
+}
+/* Answers, flags and option orders are keyed by displayed position, so QUESTIONS is always the attempt's displayed order. Attempts saved before shuffling have no order and keep the authored one. */
+function orderedQ(id, st) { const b = SET_BY_ID[id].Q, o = st && st.order; return Array.isArray(o) && o.length === b.length ? o.map(i => b[i]) : b; }
+function applyOrder() { QUESTIONS = orderedQ(setId, S); }
+function makeOrder(Q) {
+  const scen = scenOrder(Q);
+  return shuffled(scen.length, Math.random).flatMap(k => {
+    const idx = Q.map((q, i) => q.s === scen[k] ? i : -1).filter(i => i >= 0);
+    return shuffled(idx.length, Math.random).map(n => idx[n]);
+  });
 }
 function setStatus(id) {
   const st = id === setId ? S : loadSet(id);
   if (st && st.phase === "exam") return { cls: "", text: "Đang làm dở" };
   if (st && st.phase === "result") {
-    const R = grade(SET_BY_ID[id].Q, st.answers);
+    const R = grade(orderedQ(id, st), st.answers);
     return { cls: R.passed ? "pass" : "fail", text: `${R.scaled}/1000 · ${Math.round((st.endedAt - st.startedAt) / 60000)} phút` };
   }
   return { cls: "", text: "Chưa làm" };
 }
 let S = load() || fresh();
+applyOrder();
 let timerId = null, modal = false, mapOpen = false, reviewFilter = "all", reviewDomain = "0", confirmDiscard = false;
 let hints = true;
 try { hints = localStorage.getItem("ccarf-hints") !== "0"; } catch (e) {}
 function setHints(on) { hints = on; try { localStorage.setItem("ccarf-hints", on ? "1" : "0"); } catch (e) {} }
-function elimOf(q, o) { const id = setId === 1 ? (ELIM_TAGS[q] || {})[o] : (QUESTIONS[q].x || {})[o]; return id ? ELIM[id] : null; }
+function elimOf(q, o) { const id = setId === 1 ? (ELIM_TAGS[SET_BY_ID[1].Q.indexOf(QUESTIONS[q])] || {})[o] : (QUESTIONS[q].x || {})[o]; return id ? ELIM[id] : null; }
 function sheetBody() {
   return `<div class="ehead"><span>Cụm từ trong đáp án</span><span>Vì sao loại</span><span>Chọn gì thay thế</span></div>` + ELIM_GROUPS.map((g, i) => `<div class="egroup"><h3>${esc(g)}</h3>${
     Object.values(ELIM).filter(r => r.g === i).map(r => `<div class="erow"><span class="term">${fmt(r.t)}</span><span class="why">${fmt(r.why)}</span><span>${fmt(r.use)}</span></div>`).join("")
@@ -3454,6 +3465,8 @@ function counts() { let a = 0, f = 0; QUESTIONS.forEach((_, i) => { if (answered
 function begin() {
   S = fresh();
   S.phase = "exam";
+  S.order = makeOrder(SET_BY_ID[setId].Q);
+  applyOrder();
   S.perm = QUESTIONS.map(q => shuffled(q.o.length, Math.random));
   S.startedAt = Date.now();
   S.deadline = S.startedAt + LIMIT_MIN * 60000;
@@ -3657,7 +3670,7 @@ function resultView() {
       <div class="reviews">${cards || `<p class="empty">Không có câu nào khớp bộ lọc này.</p>`}</div>
     </section>
     <details class="sheetx"><summary>Bảng từ cần loại</summary>${sheetBody()}</details>
-    <div class="actions"><button class="btn primary" id="again">Làm lại đề (đảo thứ tự đáp án)</button><button class="btn" id="home2">Về danh sách đề</button></div>
+    <div class="actions"><button class="btn primary" id="again">Làm lại đề (đảo câu hỏi và đáp án)</button><button class="btn" id="home2">Về danh sách đề</button></div>
   </main>`;
 }
 
@@ -3754,7 +3767,7 @@ app.addEventListener("click", e => {
     case "maptoggle": mapOpen = !mapOpen; return render();
     case "xhtml": return exportFile("html");
     case "xcsv": return exportFile("csv");
-    case "again": delete app.dataset.home; S = fresh(); save(); app.dataset.home = "1"; render(); window.scrollTo(0, 0); return;
+    case "again": delete app.dataset.home; S = fresh(); applyOrder(); save(); app.dataset.home = "1"; render(); window.scrollTo(0, 0); return;
   }
 });
 app.addEventListener("change", e => {
