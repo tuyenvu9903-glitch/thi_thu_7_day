@@ -243,7 +243,11 @@ details.sheetx[open] > summary { margin-bottom: 8px; }
 @media (prefers-reduced-motion: no-preference) { .opt, .btn, .cell, .chip { transition: border-color .12s, background .12s, color .12s; } }
 
 .flashwrap { display: grid; gap: 8px; }
-.diffblock { margin: 8px 0 28px; }
+.diffblock { margin: 8px 0 28px; scroll-margin-top: 64px; }
+.domgroup { scroll-margin-top: 56px; }
+.domhead { margin: 18px 0 10px; padding-top: 14px; border-top: 1px solid var(--line2); font: 650 16px var(--sans); color: var(--muted); letter-spacing: .02em; }
+.domhead span { font-weight: 500; }
+.domchips { margin-bottom: 18px; }
 .diffblock h2 { margin: 0 0 10px; font: 650 22px/1.3 var(--display); }
 .difftable { width: 100%; }
 .difftable th, .difftable td { text-align: left; vertical-align: top; padding: 12px 16px; }
@@ -251,7 +255,7 @@ details.sheetx[open] > summary { margin-bottom: 8px; }
 .difftable th:last-child, .difftable td:last-child { width: 42%; }
 .difftable td:last-child { font-weight: 600; }
 .diffnote { margin: 8px 0 0; color: var(--muted); font-size: 16px; }
-.flashwrap .filters { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0 12px; }
+.flashwrap > .filters { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0 12px; }
 .diffblock.diffhl { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 8px; background: var(--accent-soft); padding: 12px 14px; }
 .rev .stem.hasdiff a { color: inherit; text-decoration: none; cursor: pointer; }
 .rev .stem.hasdiff a:hover { color: var(--accent); }
@@ -3526,6 +3530,14 @@ function toggle(optIdx) {
   S.answers[S.cur] = sel; save(); render(`o${optIdx}`);
 }
 
+const TASK_TABLES = {
+  "1.1": ["agentic-loop"], "1.2": ["coordinator"], "1.5": ["hooks"], "1.6": ["decomposition"], "1.7": ["session-state"],
+  "2.1": ["wrong-tool"], "2.2": ["errors-retry"], "2.5": ["grep-glob-read"],
+  "3.3": ["where-to-put"], "3.5": ["iterate"], "3.6": ["ci"],
+  "4.1": ["prompt-examples"], "4.2": ["prompt-examples"], "4.3": ["schema"], "4.4": ["validation-retry"], "4.5": ["batches"], "4.6": ["review"],
+  "5.1": ["context-facts"], "5.3": ["error-propagation"], "5.4": ["codebase-context"], "5.5": ["reliability"], "5.6": ["provenance"]
+};
+
 function tablesFor(q) {
   const stem = String(q.q).toLowerCase();
   const ans = q.a.map(i => String(q.o[i])).join("\n").toLowerCase();
@@ -3612,16 +3624,89 @@ function tablesFor(q) {
       has(ans, /clearer descriptions; do not merge|fix the (?:tool )?description|do not disable the built-in|keyword-style wording is overriding|revise the system prompt|specialized (?:sub)?agents|narrow `verify_fact`/))
     add("wrong-tool");
 
-  if (has(ans, /mcp resource|calibrat(?:e|ed) on (?:a )?labeled|break accuracy down by type|stratified (?:random )?sampl/) ||
-      has(stem, /overall accuracy|97% accuracy|98% accuracy|eliminating human review|reduce human review|self-reported confidence|high-confidence extractions|stratified|not only in aggregate/) ||
-      has(t, /stop_reason` is `max_tokens/) ||
-      has(stem, /what exists without exploratory|wasted (?:exploratory )?calls|which internal (?:datasets|reports) exist/))
+  if (has(ans, /calibrat(?:e|ed) on (?:a )?labeled|break accuracy down by type|stratified (?:random )?sampl/) ||
+      has(stem, /overall accuracy|97% accuracy|98% accuracy|eliminating human review|reduce human review|self-reported confidence|high-confidence extractions|stratified|not only in aggregate/))
     add("reliability");
+
+  if (has(ans, /mcp resource|community (?:mcp )?server|~\/\.claude\.json/) ||
+      has(stem, /what exists without exploratory|wasted (?:exploratory )?calls|which internal (?:datasets|reports) exist/))
+    add("mcp-setup");
+
+  if (has(t, /stop_reason` is `max_tokens/)) add("agentic-loop");
+
+  if (has(ans, /fork_session|fork-based sessions|create a fork/)) add("session-state");
+
+  if (has(ans, /per-file|integration pass|cross-section pass|section by section/)) add("decomposition");
+
+  if (has(ans, /goal and the quality criteria|separates each claim|source metadata|structured key facts|metadata such as/) ||
+      (has(stem, /agentdefinition/) && has(ans, /\bdescription\b/)))
+    add("subagent-handoff");
+
+  if (has(ans, /findings (?:from earlier subagents |of the three investigations )?directly in the|explicitly in the prompt|in the subagent's prompt|in the report writer's prompt|into the initial prompt/))
+    add("subagents");
+
+  if (has(t, /fetch_url|load_document|verify_fact|tool allocation|fact-check tool|18 tools|22 tools/) ||
+      has(ans, /only the (?:search-related )?tools (?:that )?its role|specialized (?:sub)?agents/))
+    add("tool-distribution");
+
+  if (has(ans, /`claude\.md`/) && has(ans, /\bskill\b/)) add("where-to-put");
+
+  if (has(ans, /recommended (?:refund )?action|agent's recommended/)) add("escalate");
+
+  if (has(ans, /`task` (?:tool )?calls|include `task`/)) add("subagents");
+
+  if (has(ans, /programmatic (?:prerequisite|check) that blocks/)) { add("guarantees"); add("hooks"); }
+  if (has(ans, /error result explaining/)) add("hooks");
+
+  if (has(ans, /mcp tool's description/)) add("wrong-tool");
+
+  if (has(ans, /propagates? only|only the (?:unresolved|permanent) failure|partial results|access failures? from valid empty|coverage (?:gap|annotations)/))
+    add("error-propagation");
+
+  if (has(ans, /absent from the source|stop retrying|specific validation errors|`calculated_total`|`detected_pattern`/))
+    add("validation-retry");
+
+  /* Every question carries its task statement, so each task also links to the table built for it. */
+  (TASK_TABLES[String(q.t)] || []).forEach(add);
 
   return ids;
 }
 
-const FLASH_TABLES = [{"id": "skill-frontmatter", "title": "Frontmatter của skill", "rows": [["Input, parameters, arguments, autocomplete, prompt for a name or number", "`argument-hint`"], ["File path, glob, directory, file matching, only when these files are edited", "`paths`"], ["Permission, tools, Read, Grep, Bash, must never modify files or run shell", "`allowed-tools`"], ["Context overflow, isolated, verbose output, main session has lost room", "`context: fork`"]]}, {"id": "tool-choice", "title": "tool_choice", "rows": [["Conversational, may reply with text, use a tool only when needed", "`auto`"], ["A tool call is required, the model still picks which; document type unknown", "`any`"], ["The first turn must call one named tool, then the agent may reply with text", "forced tool, then `auto`"], ["`auto` is still returning text when a tool call must happen", "`any`, or force that tool"]]}, {"id": "session-commands", "title": "/compact, /clear, --resume, /memory", "rows": [["Session is full, the work is still going, keep the conclusions", "`/compact`"], ["Wipe context; the current work is no longer needed", "`/clear`"], ["Continue a previous session, and the files or tool results are still valid", "`--resume`"], ["Confirm which memory files are actually loaded in this session", "`/memory`"]], "note": "If files or tool results are already stale, do not use `--resume`. Start a new session and pass a structured summary."}, {"id": "grep-glob-read", "title": "Grep, Glob, Read", "rows": [["Find lines, imports, an error code, or other file contents", "Grep"], ["Find files by a path pattern, such as `**/migrations/*.sql`", "Glob"], ["Explore a large repo, then open only what you need", "Glob or Grep first, then Read selectively"], ["Read every file from the start, or use Glob to search line contents", "not this"]]}, {"id": "guarantees", "title": "Khi đề đòi bảo đảm", "rows": [["must, never, guaranteed, a forbidden command must not run", "`PreToolUse` hook or a programmatic gate"], ["Block the command with `PostToolUse`", "too late; use `PreToolUse`"], ["Add a prompt rule, a `CLAUDE.md` line, capitals, or few-shot for a must-never rule", "not enough; enforce it in code"], ["Lower the temperature so the answer is guaranteed", "not enough; use a schema, hook, or gate"]]}, {"id": "errors-retry", "title": "Lỗi, retry và dữ liệu thiếu", "rows": [["Timeout or a transient failure", "`isError: true`, `isRetryable: true`"], ["Policy, compliance, or a business-rule error", "`isRetryable: false`, plus an explanation"], ["The value is not in the source documents", "return `null`, make the field nullable, mark the gap"], ["A tool fails, and an empty success would mislead the next step", "a structured error, keep the original value"]]}, {"id": "sources", "title": "Số liệu và nguồn", "rows": [["Two sources disagree on a figure", "keep both, with sources and dates"], ["Average them, pick one, or take the larger value", "no; annotate both for the coordinator"], ["A fact is missing; guess or use general knowledge", "ask, re-delegate, or state the gap"], ["A placeholder such as `N/A`, or a required field that may be absent", "`null`; make the field optional"]]}, {"id": "escalate", "title": "Escalate và bàn giao", "rows": [["The customer asked to speak to a person", "escalate immediately"], ["The customer is frustrated but has not asked for a person", "not automatic; escalate if there is a policy gap or no progress"], ["A follow-up question or the agent itself can finish the case", "resolve it; do not escalate yet"], ["Handing the case to a human", "a structured summary (ID, cause, amounts, action), not the raw transcript"]]}, {"id": "subagents", "title": "Subagent và chạy song song", "rows": [["A subagent needs facts from the parent conversation", "put them in the launch prompt; it does not inherit history"], ["Several subagents work on one job", "hub-and-spoke through the coordinator, not peer messages"], ["Independent jobs should run in parallel", "several `Task` calls in one response"], ["The coordinator never spawns subagents and tries the work itself", "check that its `allowedTools` includes `Task`"]]}, {"id": "batches", "title": "Message Batches API", "rows": [["Matching batch results after the order changes", "`custom_id`"], ["An SLA of about 26–30 hours, and a batch can take 24 hours", "submit every few hours, not once a day"], ["Some items succeeded and others failed", "resume and resubmit only the failures"], ["Urgent work, mid-request tools, or parallel subagents", "the synchronous API, not the Batches API"]]}, {"id": "team-config", "title": "Cấu hình team và secret", "rows": [["A convention the whole team should follow", "project-level config, committed to the repo"], ["A personal skill that must not affect anyone else", "`~/.claude/skills/`, under a different name"], ["The same guidance across packages, without copied `CLAUDE.md` files", "`.claude/rules/`, `@import`, or a `paths` glob"], ["An MCP server needs a credential", "`${VAR}` in `.mcp.json`, not a real token in the repo"]]}, {"id": "ci", "title": "CI và job tự động", "rows": [["The job hangs in CI or cron, waiting for a confirmation", "`-p` (non-interactive)"], ["Output must be parsed reliably", "`--output-format json` with `--json-schema`"], ["Parse prose with a regex or with Markdown headings", "not reliable"], ["A `CLAUDE.md` line saying not to ask for confirmation", "not the first fix for a hang"]]}, {"id": "review", "title": "Review", "rows": [["The code just written needs a review", "an independent reviewer in a separate session"], ["A CI review is too noisy", "report-or-skip criteria, or disable a noisy category; not a cap of N"], ["Later reviews should not repeat comments that are already fixed", "prior findings in context; not exact-string deduping"], ["A pull request has several commits", "review the full change, not only the latest commit"]]}, {"id": "plan-explore", "title": "Plan mode và khám phá", "rows": [["A small, already well-scoped change", "direct execution"], ["A large change, and you want to agree on a plan first", "plan mode"], ["Verbose discovery that should not fill the main session", "the Explore subagent, often with plan mode"], ["Read dozens of files into the main session first", "no; search, then Read selectively"]]}, {"id": "schema", "title": "Schema trích xuất", "rows": [["A field is sometimes missing from the source", "nullable or optional, not required"], ["A value is not present", "`null`, not `N/A`"], ["A small set of known categories", "an enum, with `other` or `unclear` if needed"], ["Documents fail validation because a field is missing", "return null and send them to human review; do not drop the rule"]]}, {"id": "wrong-tool", "title": "Khi agent chọn sai tool", "rows": [["The model confuses two tools", "rename, split, or write clearer descriptions; do not merge them"], ["The first fix when the wrong tool is chosen", "fix the description or the design, not a router and not list order"], ["You want an MCP tool used instead of a built-in one", "rewrite the MCP description; do not disable the built-in tool"], ["A keyword-style system prompt is overriding tool descriptions", "revise that prompt first"]]}, {"id": "reliability", "title": "Độ tin cậy và MCP resource", "rows": [["A slowly changing catalog or wiki hierarchy, wasted exploratory calls", "expose it as an MCP resource"], ["The model drops instructions, or the workflow design is the real problem", "split, trim, or keep case facts; not a larger model or window"], ["`stop_reason` is `max_tokens`, or the output was cut off", "raise `max_tokens`"], ["Self-reported confidence, or overall accuracy looks high enough to drop review", "calibrate on labeled data; break accuracy down by type and field"]]}];
+const FLASH_TABLES = [
+  {"id":"agentic-loop","d":1,"title":"Vòng lặp agent và stop_reason","rows":[["Loop ends on a text block, a closing phrase, or the words `final report`","loop on `tool_use`, stop on `end_turn`"],["An iteration limit is the main stopping rule","`end_turn`; a high limit only as a safeguard"],["Agent repeats lookups; the request omits earlier turns","full history: `tool_use` + `tool_result`"],["Output was cut off","raise `max_tokens`"]]},
+  {"id":"coordinator","d":1,"title":"Coordinator chia việc","rows":[["Whole areas missing, though each subagent did its work well","decomposition too narrow"],["A simple question runs every subagent","select only the subagents needed"],["Subagents return the same sources","distinct subtopics or source types"],["The draft has coverage gaps","evaluate, re-delegate, re-synthesize"]]},
+  {"id":"subagents","d":1,"title":"Subagent và chạy song song","rows":[["A subagent needs facts from the parent conversation","put them in the launch prompt; it does not inherit history"],["Several subagents work on one job","hub-and-spoke through the coordinator, not peer messages"],["Independent jobs should run in parallel","several `Task` calls in one response"],["The coordinator never spawns subagents and tries the work itself","check that its `allowedTools` includes `Task`"]]},
+  {"id":"subagent-handoff","d":1,"title":"Prompt và định nghĩa subagent","rows":[["Coordinator picks the wrong subagent","`description` in `AgentDefinition`"],["Coordinator dictates each step; subagent cannot adapt","goal + quality criteria"],["Citations get lost between subagents","structured data: claim + metadata"],["Long narratives, small context budget","structured key facts + citations"]]},
+  {"id":"guarantees","d":1,"title":"Khi đề đòi bảo đảm","rows":[["must, never, guaranteed, a forbidden command must not run","`PreToolUse` hook or a programmatic gate"],["Block the command with `PostToolUse`","too late; use `PreToolUse`"],["Add a prompt rule, a `CLAUDE.md` line, capitals, or few-shot for a must-never rule","not enough; enforce it in code"],["Lower the temperature so the answer is guaranteed","not enough; use a schema, hook, or gate"]]},
+  {"id":"hooks","d":1,"title":"Hook: sửa kết quả hay chặn lời gọi","rows":[["Dates, amounts, status codes in different formats","`PostToolUse` hook normalizes"],["A refund above the limit must go to a human","hook intercepts the outgoing call"],["Verify before refund; validate before apply","programmatic prerequisite gate"],["Call is blocked and the agent just apologizes","gate returns an error with the reason"]]},
+  {"id":"decomposition","d":1,"title":"Chia nhỏ công việc","rows":[["Fixed, predictable steps; comparable results","fixed prompt chain"],["Open-ended; early findings redirect the work","dynamic, adaptive decomposition"],["Many files; cross-file breakage is missed","per-file passes + integration pass"],["Undocumented codebase, `add comprehensive tests`","map structure, then prioritized plan"]]},
+  {"id":"session-state","d":1,"title":"Resume, fork hay bắt đầu lại","rows":[["Files and tool results are still valid","`--resume <session-name>`"],["Only a few files or sources changed","resume + name what changed"],["Saved tool results are stale","new session + structured summary"],["Compare two approaches from the same baseline","`fork_session`"]]},
+  {"id":"wrong-tool","d":2,"title":"Khi agent chọn sai tool","rows":[["The model confuses two tools","rename, split, or write clearer descriptions; do not merge them"],["The first fix when the wrong tool is chosen","fix the description or the design, not a router and not list order"],["You want an MCP tool used instead of a built-in one","rewrite the MCP description; do not disable the built-in tool"],["A keyword-style system prompt is overriding tool descriptions","revise that prompt first"]]},
+  {"id":"tool-distribution","d":2,"title":"Chia tool cho từng agent","rows":[["18 or more tools; selection accuracy has dropped","4–5 tools per role, specialized subagents"],["Generic `fetch_url` lets the agent wander","constrained `load_document`"],["Synthesis needs frequent, simple fact checks","scoped `verify_fact`"],["A subagent misuses a tool outside its role","remove it from that subagent"]]},
+  {"id":"tool-choice","d":2,"title":"tool_choice","rows":[["Conversational, may reply with text, use a tool only when needed","`auto`"],["A tool call is required, the model still picks which; document type unknown","`any`"],["The first turn must call one named tool, then the agent may reply with text","forced tool, then `auto`"],["`auto` is still returning text when a tool call must happen","`any`, or force that tool"]]},
+  {"id":"errors-retry","d":2,"title":"Lỗi tool: retry hay không","rows":[["Timeout, rate limit, transient failure","`isError: true`, `isRetryable: true`"],["Invalid input format or amount","validation error; fix input, call again"],["Policy, compliance, or a business-rule error","`isRetryable: false`, plus an explanation"],["Caller lacks permission","not retryable; escalate"]]},
+  {"id":"mcp-setup","d":2,"title":"MCP server và resource","rows":[["An MCP server for the whole team","project `.mcp.json`"],["A personal or experimental MCP server","`~/.claude.json`"],["A standard integration such as Jira","community MCP server, not custom"],["Slowly changing catalog; wasted exploratory calls","MCP resource"]]},
+  {"id":"grep-glob-read","d":2,"title":"Grep, Glob, Read, Edit","rows":[["Find lines, imports, an error code, or other file contents","Grep"],["Find files by a path pattern, such as `**/migrations/*.sql`","Glob"],["Explore a large repo, then open only what you need","Glob or Grep first, then Read selectively"],["Edit reports that the match is not unique","Read + Write, or a unique anchor"]]},
+  {"id":"team-config","d":3,"title":"Cấu hình team và secret","rows":[["A convention the whole team should follow","project-level config, committed to the repo"],["A personal skill that must not affect anyone else","`~/.claude/skills/`, under a different name"],["The same guidance across packages, without copied `CLAUDE.md` files","`.claude/rules/`, `@import`, or a `paths` glob"],["An MCP server needs a credential","`${VAR}` in `.mcp.json`, not a real token in the repo"]]},
+  {"id":"where-to-put","d":3,"title":"CLAUDE.md, rule hay skill","rows":[["Applies to every change and every session","`CLAUDE.md`"],["Occasional multi-step workflow, on request","a skill in `.claude/skills/`"],["One file type scattered across directories","`.claude/rules/` + `paths` glob"],["Long checklist in `CLAUDE.md` eats context","move it into a skill"]]},
+  {"id":"skill-frontmatter","d":3,"title":"Frontmatter của skill","rows":[["Input, parameters, arguments, autocomplete, prompt for a name or number","`argument-hint`"],["File path, glob, directory, file matching, only when these files are edited","`paths`"],["Permission, tools, Read, Grep, Bash, must never modify files or run shell","`allowed-tools`"],["Context overflow, isolated, verbose output, main session has lost room","`context: fork`"]]},
+  {"id":"plan-explore","d":3,"title":"Plan mode và khám phá","rows":[["A small, already well-scoped change","direct execution"],["A large change, and you want to agree on a plan first","plan mode"],["Verbose discovery that should not fill the main session","the Explore subagent, often with plan mode"],["Read dozens of files into the main session first","no; search, then Read selectively"]]},
+  {"id":"session-commands","d":3,"title":"/compact, /clear, --resume, /memory","rows":[["Session is full, the work is still going, keep the conclusions","`/compact`"],["Wipe context; the current work is no longer needed","`/clear`"],["Continue a previous session, and the files or tool results are still valid","`--resume`"],["Confirm which memory files are actually loaded in this session","`/memory`"]],"note":"If files or tool results are already stale, do not use `--resume`. Start a new session and pass a structured summary."},
+  {"id":"iterate","d":3,"title":"Sửa dần cho ra kết quả đúng","rows":[["Prose clarifications keep failing; inconsistent format","2–3 input/output examples"],["Edge cases keep failing after an eyeball check","tests first; share failing tests"],["Unfamiliar domain, vague requirements","interview pattern"],["Two bugs whose fixes affect each other","one detailed message for both"]]},
+  {"id":"ci","d":3,"title":"CI và job tự động","rows":[["The job hangs in CI or cron, waiting for a confirmation","`-p` (non-interactive)"],["Output must be parsed reliably","`--output-format json` with `--json-schema`"],["Generated tests duplicate existing tests","existing test files in context"],["CI lacks the team's testing standards and fixtures","document them in `CLAUDE.md`"]]},
+  {"id":"prompt-examples","d":4,"title":"Tiêu chí rõ hay few-shot","rows":[["Vague: `be conservative`, `flag anything unusual`","explicit criteria: flag vs skip"],["Rules are detailed; ambiguous cases still wrong","2–4 few-shot examples with reasoning"],["Works on one layout only (tables, not footnotes)","examples across document structures"],["Findings lack a location or a fix","examples: location, issue, severity, fix"]]},
+  {"id":"schema","d":4,"title":"Schema trích xuất","rows":[["`Return only valid JSON` still yields malformed output","`tool_use` with a JSON schema"],["A field is sometimes missing; the model invents a value","nullable; `null`, not `N/A`"],["Known categories, with new or unclear cases","enum + `other` / `unclear`"],["Schema passes, but totals do not add up","syntax fixed, not semantics; keep validation"]]},
+  {"id":"validation-retry","d":4,"title":"Validate và retry","rows":[["Format error; the information is on the page","retry: document + failed output + errors"],["Resend unchanged, or `please try again`","no; give specific errors"],["Value is not in the source (`see Schedule B`)","stop retrying; `null` or human review"],["Stated total differs from the line items","`calculated_total` + `conflict_detected`"]]},
+  {"id":"batches","d":4,"title":"Message Batches API","rows":[["Matching batch results after the order changes","`custom_id`"],["An SLA of about 26–30 hours, and a batch can take 24 hours","submit every few hours, not once a day"],["Some items succeeded and others failed","resume and resubmit only the failures"],["Urgent work, mid-request tools, or parallel subagents","the synchronous API, not the Batches API"]]},
+  {"id":"review","d":4,"title":"Review","rows":[["The code just written needs a review","an independent reviewer in a separate session"],["A CI review is too noisy","report-or-skip criteria, or disable a noisy category; not a cap of N"],["Later reviews should not repeat comments that are already fixed","prior findings in context; not exact-string deduping"],["A pull request has several commits","review the full change, not only the latest commit"]]},
+  {"id":"context-facts","d":5,"title":"Giữ dữ kiện trong hội thoại dài","rows":[["Summaries blur amounts, dates, order numbers","persistent case-facts block"],["Tool returns 40+ fields; about five matter","trim tool output"],["Findings in the middle of a long input get dropped","key findings first + section headers"],["Keep only the last few messages, or a larger window","no; keep history, trim outputs"]]},
+  {"id":"escalate","d":5,"title":"Escalate và bàn giao","rows":[["The customer asked to speak to a person","escalate immediately"],["The customer is frustrated but has not asked for a person","not automatic; escalate if there is a policy gap or no progress"],["A follow-up question or the agent itself can finish the case","resolve it; do not escalate yet"],["Handing the case to a human","a structured summary (ID, cause, amounts, action), not the raw transcript"]]},
+  {"id":"error-propagation","d":5,"title":"Báo lỗi lên coordinator","rows":[["Subagent hits a brief timeout or a 429","retry locally"],["Subagent still fails after its retries","failure type, query, partial results, alternatives"],["`no results`, but the source was down","access failure ≠ valid empty result"],["One source is down and the whole report fails","continue + annotate the gap"]]},
+  {"id":"codebase-context","d":5,"title":"Khám phá codebase lớn","rows":[["Answers drift to `typical patterns`","scratchpad file"],["A search would return thousands of lines","delegate to a subagent"],["Next phase's subagents need earlier results","summary in each subagent's prompt"],["A long run crashes and findings are lost","exported state + manifest"]]},
+  {"id":"reliability","d":5,"title":"Review của con người và độ tin cậy","rows":[["Overall accuracy (97%) looks high enough to cut review","break down by type and field"],["Self-reported confidence used as a threshold","calibrate on labeled data"],["High-confidence extractions skip review","stratified random sampling"],["Low-confidence or contradictory extractions","human review, by impact"]]},
+  {"id":"sources","d":5,"title":"Số liệu và nguồn","rows":[["Two sources disagree on a figure","keep both, with sources and dates"],["Average them, pick one, or take the larger value","no; annotate both for the coordinator"],["A fact is missing; guess or use general knowledge","ask, re-delegate, or state the gap"],["A lookup returns several matching records","ask for another identifier"]]},
+  {"id":"provenance","d":5,"title":"Truy nguồn khi tổng hợp","rows":[["Nobody can tell which source supports a claim","claim-source mappings"],["Figures from different years look contradictory","publication / collection dates"],["Sources agree on some topics, conflict on others","established vs contested"],["Everything rendered as uniform paragraphs","tables for financial data, prose for news"]]}
+];
 let flashOpen = false;
 let flashFromResult = false;
 let flashHighlight = [];
@@ -3671,7 +3756,7 @@ function closeFlash() {
   window.scrollTo(0, 0);
 }
 function flashStatus() {
-  return { cls: "", text: FLASH_TABLES.length + " bảng · học 1 được 4" };
+  return { cls: "", text: FLASH_TABLES.length + " bảng · 5 domain · học 1 được 4" };
 }
 function flashTitle(id) {
   return (FLASH_TABLES.find(t => t.id === id) || {}).title || id;
@@ -3987,6 +4072,201 @@ const KW_RE = {
   ],
 };
 
+/* Keywords for the tables added later, and extra phrases for the earlier ones. Merged into KW_RE below. */
+const KW_MORE = {
+  "agentic-loop": [
+    /ends the turn as soon as the response contains a text block/i, /no lookup ever happens/i,
+    /contains only the original user message and the newest tool result/i, /calls `get_customer` repeatedly/i,
+    /two `tool_use` blocks/i, /what must the next api request contain/i,
+    /limit of five iterations the loop's main stopping rule/i, /end mid-investigation/i,
+    /`stop_reason` (?:is|of) `(?:tool_use|end_turn|max_tokens)`/i, /text block and no tool request/i,
+    /appended the tool's output to a log but not to the messages/i, /answers as if nothing had been looked up/i,
+    /hard-coded decision tree/i, /model-driven loop/i, /only executes tools when the first content block/i,
+    /omits the earlier assistant message/i, /unmatched tool result/i,
+    /contains the words `final report`/i, /research ends early/i, /output (?:was|is) cut off/i,
+  ],
+  "coordinator": [
+    /each subagent (?:completed its (?:assignment|subtask) (?:thoroughly|well)|did its assigned work correctly)/i,
+    /discuss only lithium-ion batteries/i, /every request runs all four subagents/i, /costs as much as a full market study/i,
+    /coverage gaps/i, /return the same (?:well-known )?sources/i, /regional data is barely covered/i,
+    /always runs the [a-z, -]+ subagents/i, /simple questions are slow and costly/i,
+    /covers only the card flow/i, /thin coverage/i, /budget for more work/i, /`who founded this journal\?`/i,
+    /both answers are individually accurate/i, /flows are missing/i, /omitted housing markets and urban tax effects/i,
+    /all on employee productivity/i, /ask the search subagent directly/i, /remove a round trip through the coordinator/i,
+    /give the customer conflicting statements/i, /duplicated sections and uneven depth/i,
+    /one-sentence fact-check request/i, /delegates to a single subagent/i, /omits two others/i, /have gaps/i,
+    /one consistent place to implement that recovery logic/i,
+  ],
+  "subagents": [
+    /"no findings to synthesize\."/i, /never spawns a subagent and attempts the work itself/i, /one per turn/i,
+    /nothing in the searches depends on another search's result/i, /three independent investigations/i,
+    /four independent searches/i, /requests one search, waits, and requests the next/i,
+    /re-discovers them each time/i, /asks customers for account details they already gave the coordinator/i,
+    /receives only conclusions from synthesis/i, /phase two will spawn several subagents/i,
+  ],
+  "subagent-handoff": [
+    /source details are mixed into the prose/i, /citations get lost/i,
+    /frequently chooses the document-analysis subagent for web research tasks/i, /which part of the `AgentDefinition`/i,
+    /tells it exactly which pages to open and in what order/i, /cannot adapt/i,
+    /cannot include the citations users require/i, /prompt that the coordinator gives/i,
+    /long narratives containing their reasoning/i, /limited context budget/i, /cannot tell how or when they were measured/i,
+  ],
+  "guarantees": [
+    /has succeeded on the exact same migration file first/i, /very occasionally skips validation/i,
+    /before identity has been verified/i, /requires this to never happen/i,
+  ],
+  "hooks": [
+    /unix timestamps/i, /iso 8601(?: strings)?/i, /numeric (?:status )?codes/i, /`1\.234,56` and `1,234\.56`/i,
+    /`2024-03-01`, `March 2024`/i, /which solution is deterministic/i,
+    /refunds above \$500/i, /must go to a human/i, /any refund above \$500 be routed to a human/i, /explain this to the customer/i,
+    /inside a `PostToolUse` hook/i, /the customer has already been paid/i, /which two uses of hooks/i,
+    /just apologizes and ends the conversation/i, /what should the gate return/i,
+  ],
+  "decomposition": [
+    /through classification, extraction, validation, and export/i, /investigating why accuracy for one supplier dropped/i,
+    /no documentation/i, /nobody knows which modules are risky/i, /fixed steps of fetch, filter, summarize, and format/i,
+    /open-ended/i, /best fit for a fixed sequential prompt chain/i, /always performs the same three steps/i,
+    /comparable results from run to run/i, /early findings may redirect the work/i,
+    /fixed path of eligibility, label, then confirmation/i, /investigation that changes as facts emerge/i,
+    /starts editing files in alphabetical order/i, /is predictable/i, /planner spends substantial time deciding what to do/i,
+    /the cause could be dependencies, caching, or test configuration/i, /touches 30 files/i,
+    /misses a change in a shared type that breaks three consumers/i, /monthly fixed-format market update/i,
+    /each answer shapes the next query/i, /misses a type mismatch between an api handler and its client/i,
+    /single review pass/i, /45-file pull request/i, /reviewed in a single pass/i, /extracted in one pass/i,
+    /clauses that interact across sections/i,
+  ],
+  "session-state": [
+    /compare two refactoring strategies/i, /without either attempt contaminating the other/i, /begin from the same understanding/i,
+    /paused for two days is resumed/i, /still contains the old `lookup_order` result/i, /then compare them/i,
+    /the analysis is still accurate/i, /worry about its saved search results/i, /current news section is outdated/i,
+    /only two files in the module changed overnight/i, /three of them were retracted yesterday/i, /the remaining analysis stands/i,
+    /two different framings/i, /starting from the same completed literature analysis/i,
+    /without either one's reasoning leaking into the other/i,
+  ],
+  "wrong-tool": [
+    /the tool descriptions are currently `[^`]+` and `[^`]+`/i, /both described as `[^`]+`/i,
+    /descriptions? (?:says?|reads) (?:only )?`[^`]+`/i, /whose descriptions differ by only one word/i,
+    /keeps using the built-in grep/i, /`check the docs for any question about configuration\.`/i,
+    /`always verify facts by searching the web`/i, /goes unused/i, /passes cents when dollars are expected/i,
+    /almost at random/i, /often chooses the wrong one/i,
+  ],
+  "tool-distribution": [
+    /generic `fetch_url` tool/i, /wander onto arbitrary sites/i, /tool allocation/i, /\b(?:18|22) tools\b/i,
+    /tool selection (?:accuracy )?has dropped/i, /full web search/i,
+  ],
+  "errors-retry": [
+    /brief timeout/i, /exceeded the vault's rate limit/i, /`isError` true/i, /compliance hold/i,
+    /waits and retries with backoff until the job times out/i,
+    /a timeout, an invalid amount, and an order outside the return window/i, /final sale/i, /returns a generic failure/i,
+    /503 three times/i, /429 response/i, /password protected/i, /fails permanently/i,
+    /keeps failing after all of its retries/i, /invalid format/i, /lacks permission/i,
+  ],
+  "mcp-setup": [
+    /just to discover which internal reports exist/i, /exploring what schemas exist/i,
+    /(?:well-)?maintained community (?:\w+ )?mcp server/i, /write a custom one/i, /listing wiki spaces and pages/i,
+    /page hierarchy changes slowly/i, /wasted calls/i, /which internal datasets exist/i, /many exploratory queries/i,
+    /discovering which internal reports exist/i,
+  ],
+  "grep-glob-read": [
+    /re-exports `send` under the aliases `post` and `dispatch`/i, /find every real caller/i,
+    /unfamiliar repository of 4,000 files/i, /edit reports that the match is not unique/i, /appears in four sections/i,
+  ],
+  "where-to-put": [
+    /applies to every code change/i, /used about once per sprint/i, /lives in the root `CLAUDE\.md`/i,
+    /about twice a quarter/i, /consuming context in every session/i, /`every function needs a docstring`/i,
+    /rarely used 12-step data-backfill procedure/i, /should only load when claude code touches terraform files/i,
+    /scattered throughout the codebase/i, /a `CLAUDE\.md` in every test directory/i,
+    /needed occasionally and only on request/i, /all generated code use the company's license header/i,
+  ],
+  "iterate": [
+    /several rounds of prose clarification/i, /keeps mishandling/i, /fixing one changes how the other behaves/i,
+    /two prose rewrites/i, /inconsistent key naming/i, /has not used before/i,
+    /failure modes you have not considered/i, /passed your eyeball check but failed in production/i,
+    /`handle null values properly`/i, /results still differ between runs/i,
+    /independent of a separate logging bug/i, /neither fix affects the other/i, /match an unusual output format/i,
+    /limited experience/i, /requirements are still vague/i, /several edge cases that fail/i,
+    /already have a test suite/i,
+  ],
+  "ci": [
+    /duplicate existing coverage/i, /keeps proposing tests that already exist/i, /low value/i,
+  ],
+  "prompt-examples": [
+    /two paragraphs of definitions have not helped/i, /inconsistent about whether/i,
+    /returns empty results for papers that use a bibliography or footnotes/i, /instructions already say/i,
+    /`flag only suspicious line items`/i, /the flags vary widely/i, /sometimes invents exact numbers/i,
+    /appear in a footnote/i, /works when terms appear in a table/i, /`check that comments are accurate`/i,
+    /dismiss most of the comment-related findings as nitpicks/i, /in new forms it has not seen/i,
+    /flags safe uses/i, /written rules have not resolved this/i,
+    /`style` findings are wrong so often/i, /stopped reading any comments/i,
+    /you have already described branch coverage in the prompt/i, /`method not stated`/i,
+    /embed the method within a paragraph/i, /`extract only clearly stated obligations\.`/i,
+    /`important contract risks`/i, /disagree with the labels/i, /when formatting is unusual/i,
+    /rule-based wording has not fixed this/i, /detailed instructions already exist/i,
+    /lack a suggested fix or a precise location/i, /`flag any unusual contract terms`/i, /output varies widely/i,
+    /your three examples all use the same layout/i, /accuracy is poor on other layouts/i,
+  ],
+  "schema": [
+    /"return only valid json"/i, /extra commentary or malformed syntax/i, /the model invents one/i,
+    /forced into the nearest category/i, /only sometimes include/i, /invented cost centers/i,
+    /new expense types appear/i, /json syntax errors disappeared/i, /do not add up to the total/i,
+    /genuinely unclear and new types do appear/i, /lack a clear date/i, /some study types are new/i,
+    /may or may not contain/i, /`tool_use` with json schemas/i, /cannot be determined/i, /semantic validation can now be removed/i,
+  ],
+  "validation-retry": [
+    /re-sends the original prompt unchanged/i, /most retries fail in the same way/i,
+    /is not part of the (?:submitted document set|file)/i, /even after three retries/i,
+    /line items do not add up to the extracted total/i, /the source invoice itself is wrong/i,
+    /exists only in a separate purchase order that was not provided/i, /although iso format is required/i,
+    /stated total that differs from the sum of its entries/i,
+    /`your last answer was invalid, please try again`/i, /`please try again`/i, /`see Schedule B`/i,
+    /nobody can tell which code patterns are responsible/i, /which detection rules developers routinely reject/i,
+    /the information is on the page/i, /do not reconcile/i, /retries return the same printed values/i,
+    /most likely to be fixed by retrying/i, /passes the schema/i,
+  ],
+  "batches": [
+    /batch of 200,000 contracts/i, /unsure if the prompt handles all formats/i,
+  ],
+  "review": [
+    /review architecture for ai-generated code/i, /its own session then checks the draft/i,
+    /catch subtle issues in generated code/i, /limited human attention/i,
+    /judges whether its own extraction is correct, in the same request/i, /`all_fields_verified`/i,
+  ],
+  "context-facts": [
+    /summaries turn "[^"]+" into "[^"]+"/i, /summarized history turns `[^`]+` into `[^`]+`/i,
+    /returns? over 40 fields/i, /only about five matter/i, /use only five/i,
+    /omits findings from the middle of the aggregated input/i, /trims each request to the last four messages/i,
+    /forget what they already investigated and repeat lookups/i, /mixes them up after a summary/i,
+    /after progressive summarization/i, /accumulates large ocr tool outputs/i,
+    /need only the identified line items/i,
+  ],
+  "escalate": [
+    /cannot see the agent's conversation or tool history/i, /belong in the handoff/i, /no transcript access/i,
+  ],
+  "error-propagation": [
+    /what should reach the coordinator/i, /despite local retries/i, /exhausts its local retries/i,
+    /times out on page 7/i, /fails on one topic because of a timeout/i, /returns no matching documents/i,
+    /stays unavailable after retries/i, /fails entirely whenever its subagent reports an error/i,
+    /returned `no results`/i, /the database was down/i, /receives `search failed`/i,
+    /cannot decide whether to retry, switch sources, or proceed/i, /brief timeout/i, /429 response/i,
+  ],
+  "codebase-context": [
+    /starts referring to ["`]typical \w+ patterns["`]/i, /answers (?:become inconsistent|begin to conflict)/i,
+    /phase two will spawn several subagents/i, /would return thousands of lines/i,
+    /crashed twice during long runs/i, /losing hours of findings/i,
+  ],
+  "reliability": [
+    /threshold of 0\.9/i, /which fields skip review/i,
+  ],
+  "provenance": [
+    /can no longer trace claims in final reports to their sources/i, /being described as contradictions/i,
+    /one dated 2023 and one dated 2025/i, /can no longer tell which contract clause supports each statement/i,
+    /62% from a 2019 survey and 78% from a 2024 survey/i, /rendered as uniform paragraphs/i,
+    /how solid each statement in a report is/i, /agree on some topics and conflict on others/i,
+    /cannot tell where each value came from/i, /need to trace every claim/i,
+  ],
+};
+Object.keys(KW_MORE).forEach(id => { KW_RE[id] = (KW_RE[id] || []).concat(KW_MORE[id]); });
+
 function kwSpans(text, ids) {
   const raw = [];
   for (const id of ids || []) {
@@ -4034,19 +4314,27 @@ function flashTable(t, n) {
   </section>`;
 }
 function flashView() {
-  const chips = `<div class="filters">${FLASH_TABLES.map(t => `<button class="chip" data-diff="${t.id}" aria-pressed="${flashFocus === t.id || flashHighlight.includes(t.id)}">${esc(t.title)}</button>`).join("")}</div>`;
+  const on = id => flashFocus === id || flashHighlight.includes(id);
+  const num = Object.fromEntries(FLASH_TABLES.map((t, i) => [t.id, i + 1]));
+  const doms = Object.keys(DOMAINS).map(d => ({ d, list: FLASH_TABLES.filter(t => String(t.d) === d) })).filter(g => g.list.length);
+  const nav = `<div class="filters">${doms.map(g => `<button class="chip" data-dom="${g.d}" aria-pressed="${g.list.some(t => on(t.id))}">Domain ${g.d}</button>`).join("")}</div>`;
+  const groups = doms.map(g => `<section class="domgroup" id="dom-${g.d}">
+      <h2 class="domhead">Domain ${g.d} · ${esc(DOMAINS[g.d].name)} <span>${DOMAINS[g.d].weight}%</span></h2>
+      <div class="filters domchips">${g.list.map(t => `<button class="chip" data-diff="${t.id}" aria-pressed="${on(t.id)}">${esc(t.title)}</button>`).join("")}</div>
+      ${g.list.map(t => flashTable(t, num[t.id])).join("")}
+    </section>`).join("");
   const back = flashFromResult
     ? `<button class="btn" id="flashhome">Về kết quả</button>`
     : `<button class="btn" id="flashhome">Về danh sách đề</button>`;
   return `<div class="hero"><div class="wrap">
       <div class="eyebrow">CCAR-F practice</div>
       <h1>Bảng phân biệt nhanh để đi thi</h1>
-      <p class="lead">Mỗi bảng là một cụm đáp án dễ nhầm trên cả sáu đề. Cột trái là từ khóa thường gặp trong câu hỏi, cột phải là đáp án. Học một bảng được cả bốn.</p>
+      <p class="lead">Mỗi bảng là một cụm đáp án dễ nhầm trên cả sáu đề, xếp theo năm domain của bài thi. Cột trái là từ khóa thường gặp trong câu hỏi, cột phải là đáp án. Học một bảng được cả bốn. Trong lúc làm bài, các từ khóa này được bôi vàng ngay trong câu hỏi.</p>
       <div class="actions">${back}</div>
     </div></div>
     <main class="wrap start flashwrap">
-      ${chips}
-      ${FLASH_TABLES.map((t, i) => flashTable(t, i + 1)).join("")}
+      ${nav}
+      ${groups}
     </main>`;
 }
 
@@ -4143,7 +4431,7 @@ function examView() {
         <section class="sheet">
           <div class="qhead"><span class="eyebrow">Question ${S.cur + 1}</span>
             <button class="btn" id="flag" aria-pressed="${!!S.flags[S.cur]}">${S.flags[S.cur] ? "Đã đánh dấu" : "Đánh dấu xem lại"}</button></div>
-          <p class="stem">${fmt(q.q)}</p>
+          <p class="stem">${fmtStemKw(q.q, tablesFor(q))}</p>
           <p class="instr">${instr}${multi ? ` <span style="font-weight:400;color:var(--muted)">(${sel.length}/${want})</span>` : ""}</p>
           <div class="opts">${opts}</div>
           <p class="limit">${full ? `Bạn đã chọn đủ ${want} đáp án. Bỏ chọn một đáp án nếu muốn đổi.` : ""}</p>
@@ -4424,6 +4712,10 @@ function tick() {
 app.addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
   if (t.dataset.go !== undefined) return go(+t.dataset.go);
+  if (t.dataset.dom !== undefined) {
+    document.getElementById("dom-" + t.dataset.dom)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
   if (t.dataset.diff !== undefined) {
     document.getElementById("diff-" + t.dataset.diff)?.scrollIntoView({ behavior: "smooth", block: "start" });
     return;
