@@ -242,19 +242,24 @@ details.sheetx[open] > summary { margin-bottom: 8px; }
 }
 @media (prefers-reduced-motion: no-preference) { .opt, .btn, .cell, .chip { transition: border-color .12s, background .12s, color .12s; } }
 
-.flashwrap { display: grid; gap: 14px; }
-.flashmeta { font-weight: 600; color: var(--muted); }
-.flashcard { display: grid; gap: 14px; width: 100%; text-align: left; background: var(--sheet); color: inherit; border: 1px solid var(--line); border-radius: 12px; padding: 28px 32px; }
-.flashpair { display: grid; gap: 6px; padding: 16px 18px; border-radius: 8px; }
-.flashpair b { display: block; font: 600 16px var(--display); }
-.flashpair p { margin: 0; font-size: 20px; line-height: 1.45; }
-.flashq { background: var(--warn-soft); }
-.flashq b { color: var(--warn); }
-.flasha { background: var(--good-soft); }
-.flasha b { color: var(--good); }
-.flashnote { margin: 0; color: var(--muted); font-size: 16px; }
-.flashnav { margin-top: 0; padding-top: 0; border-top: 0; }
-@media (max-width: 860px) { .flashcard { padding: 18px 16px; } }
+.flashwrap { display: grid; gap: 8px; }
+.diffblock { margin: 8px 0 28px; }
+.diffblock h2 { margin: 0 0 10px; font: 650 22px/1.3 var(--display); }
+.difftable { width: 100%; }
+.difftable th, .difftable td { text-align: left; vertical-align: top; padding: 12px 16px; }
+.difftable th { color: var(--muted); font-weight: 600; }
+.difftable th:last-child, .difftable td:last-child { width: 42%; }
+.difftable td:last-child { font-weight: 600; }
+.diffnote { margin: 8px 0 0; color: var(--muted); font-size: 16px; }
+.flashwrap .filters { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0 12px; }
+@media (max-width: 860px) {
+  .difftable th:last-child, .difftable td:last-child { width: auto; }
+  .difftable, .difftable tbody, .difftable tr, .difftable th, .difftable td { display: block; }
+  .difftable tr { border-bottom: 1px solid var(--line); padding: 8px 0; }
+  .difftable th { display: none; }
+  .difftable td { padding: 4px 0; }
+  .difftable td:last-child { font-weight: 650; color: var(--good); }
+}
 </style>
 
 <div id="app"></div>
@@ -3511,36 +3516,9 @@ function toggle(optIdx) {
   S.answers[S.cur] = sel; save(); render(`o${optIdx}`);
 }
 
-const FLASH_KEY = "ccarf-flash-v2";
-const FLASH_GROUPS = [{"id": 0, "name": "Add resources instead of fixing the cause", "chip": "Add resources"}, {"id": 1, "name": "Stronger prompts when a guarantee is required", "chip": "Prompt guarantees"}, {"id": 2, "name": "Retries and missing data", "chip": "Retries and missing data"}, {"id": 3, "name": "Hiding or softening errors", "chip": "Hiding errors"}, {"id": 4, "name": "Figures and sources", "chip": "Figures and sources"}, {"id": 5, "name": "Escalation and human review", "chip": "Escalation and review"}, {"id": 6, "name": "Redoing too much", "chip": "Redoing too much"}, {"id": 7, "name": "Tool design", "chip": "Tool design"}, {"id": 8, "name": "The agent loop and API messages", "chip": "Agent loop and API"}, {"id": 9, "name": "Multi-agent and review", "chip": "Multi-agent and review"}, {"id": 10, "name": "Schema", "chip": "Schema"}, {"id": 11, "name": "Claude Code configuration", "chip": "Claude Code config"}, {"id": 12, "name": "Task decomposition", "chip": "Task decomposition"}, {"id": 13, "name": "tool_choice configuration", "chip": "tool_choice"}, {"id": 14, "name": "Review in CI", "chip": "CI review"}];
-const FLASH_CARDS = [{"id": "big", "g": 0, "q": ".... the model drops instructions, or the workflow design is the real problem ....", "a": ".... split the work, trim context, or keep case facts — not a larger model or a larger window ....", "note": "Exception: if `stop_reason` is `max_tokens`, raising the limit is the right fix."}, {"id": "temp", "g": 0, "q": ".... a behavior must be correct, not merely less random ....", "a": ".... a tool schema, a hook, or a programmatic gate — not a lower temperature ...."}, {"id": "prompt", "g": 1, "q": ".... must / never / guaranteed / the behavior has to hold ....", "a": ".... a `PreToolUse` hook or a prerequisite gate — not a new prompt rule or a `CLAUDE.md` line ...."}, {"id": "loud", "g": 1, "q": ".... the prompt already stated the rule, and the model still broke it ....", "a": ".... block it in code, or fix the tool description — not capitals, emphasis, or a sterner rewrite ...."}, {"id": "fewshot100", "g": 1, "q": ".... must never / compliance / the rule has to be absolute ....", "a": ".... block it in code — not few-shot examples ....", "note": "Few-shots are still right when the issue is format or an ambiguous case."}, {"id": "vague", "g": 1, "q": ".... the model needs a reliable decision rule ....", "a": ".... a concrete input or output check — not “be thorough,” “try harder,” or “best judgment” ...."}, {"id": "retryMore", "g": 2, "q": ".... a permanent error, or the data is not there ....", "a": ".... bounded retries with `isRetryable`, then report or escalate — not a higher retry limit ...."}, {"id": "sameRetry", "g": 2, "q": ".... a retry is needed after validation failed ....", "a": ".... send the specific validation error, or fix the cause — not the exact same request again ...."}, {"id": "searchMore", "g": 2, "q": ".... the value is not in the source documents ....", "a": ".... return null, make the field nullable, and mark the gap — not “search more carefully” ...."}, {"id": "retryPolicy", "g": 2, "q": ".... a policy, compliance, or business-rule error ....", "a": ".... `isRetryable: false` and an explanation — backoff only for transient errors ...."}, {"id": "fakeOk", "g": 3, "q": ".... a tool fails, times out, or cannot complete the lookup ....", "a": ".... a structured error that keeps the original value — not an empty list or a silent “success” ...."}, {"id": "generic", "g": 3, "q": ".... the agent has to decide whether to retry, escalate, or stop ....", "a": ".... `errorCategory`, `isRetryable`, and a specific reason — not “Operation failed” ...."}, {"id": "abort", "g": 3, "q": ".... one step in a workflow fails ....", "a": ".... return partial results with a structured error — not halt the entire workflow ...."}, {"id": "average", "g": 4, "q": ".... two sources give different numbers ....", "a": ".... keep both, with sources and dates — do not average them ...."}, {"id": "pickOne", "g": 4, "q": ".... two sources conflict ....", "a": ".... annotate both and let the coordinator decide — do not pick one side or the larger value ...."}, {"id": "guess", "g": 4, "q": ".... a field or fact is missing from the source ....", "a": ".... ask a follow-up, re-delegate, or state the coverage gap — do not guess or use general knowledge ...."}, {"id": "confidence", "g": 5, "q": ".... whether to trust or escalate a model judgment ....", "a": ".... use confidence only if it was calibrated on labeled data — not the model’s self-reported score ...."}, {"id": "sentiment", "g": 5, "q": ".... the customer is frustrated, but has not asked for a person ....", "a": ".... escalate only if they ask for a person, a policy is missing, or no progress is possible — not because of tone alone ...."}, {"id": "tryFirst", "g": 5, "q": ".... the customer asked to speak to a person ....", "a": ".... escalate immediately — do not try to resolve it first ...."}, {"id": "aggregate", "g": 5, "q": ".... overall accuracy looks high, and someone wants to drop review ....", "a": ".... break accuracy down by type and field, with stratified sampling — do not rely on the aggregate ...."}, {"id": "transcript", "g": 5, "q": ".... handing a case to a human ....", "a": ".... a structured summary (ID, cause, amounts, recommended action) — not the raw transcript ...."}, {"id": "askRepeat", "g": 5, "q": ".... the customer already stated several issues, or is mid-case ....", "a": ".... keep the case facts, split the issues, and stay in the same session — do not ask them to repeat or open a new ticket ...."}, {"id": "escalateMore", "g": 5, "q": ".... a follow-up question or the agent itself can finish the case ....", "a": ".... ask for the identifier if needed, then resolve it — do not escalate yet ...."}, {"id": "redo", "g": 6, "q": ".... some items in a batch already succeeded, and others failed ....", "a": ".... resume from a manifest and resubmit only the failures — do not rerun the entire batch ....", "note": "If tool results are stale, start a new session with a structured summary."}, {"id": "runTwice", "g": 6, "q": ".... one pass might have missed something ....", "a": ".... a per-file pass, an independent reviewer, and clear criteria — not two or three identical runs merged together ...."}, {"id": "byOrder", "g": 6, "q": ".... merging Message Batches results ....", "a": ".... match them with `custom_id` — not by arrival order ...."}, {"id": "merge", "g": 7, "q": ".... the model is confusing two tools ....", "a": ".... rename them, split them, or write clearer descriptions — do not merge the two tools ...."}, {"id": "router", "g": 7, "q": ".... the first fix for the wrong tool being chosen ....", "a": ".... fix the tool description or the tool design — not a new router or classifier in front ...."}, {"id": "toolOrder", "g": 7, "q": ".... the model is picking the wrong tool ....", "a": ".... fewer tools and clearer descriptions — not a different tool-list order ...."}, {"id": "disable", "g": 7, "q": ".... you want the model to use an MCP tool instead of a built-in one ....", "a": ".... rewrite the MCP tool description — do not disable the built-in tool ...."}, {"id": "overTool", "g": 7, "q": ".... a specialist subagent has a narrow job, such as synthesis ....", "a": ".... give it a narrow tool such as `verify_fact`, and return hard cases to the coordinator — not full web search or tools outside its role ...."}, {"id": "parseText", "g": 8, "q": ".... deciding whether the model is done or is about to call a tool ....", "a": ".... use `stop_reason` — do not scan the response text ...."}, {"id": "iterCap", "g": 8, "q": ".... when the agent loop should stop ....", "a": ".... stop on `stop_reason` — a fixed iteration cap is only a safety net ...."}, {"id": "latestOnly", "g": 8, "q": ".... the next Messages API request in a multi-turn tool loop ....", "a": ".... resend the full conversation history — not only the latest message or `tool_result` ...."}, {"id": "splitResults", "g": 8, "q": ".... the model made several tool calls in one turn ....", "a": ".... one user message containing every `tool_result` — not one message per result ...."}, {"id": "cacheState", "g": 8, "q": ".... keeping conversation state across requests ....", "a": ".... send the full history each time — prompt caching only cuts the cost of a repeated prefix ...."}, {"id": "inherit", "g": 9, "q": ".... a subagent needs facts from the parent conversation ....", "a": ".... put those facts in the prompt that launches it — a subagent does not inherit history or shared memory ...."}, {"id": "peer", "g": 9, "q": ".... several subagents have to work on one job ....", "a": ".... hub-and-spoke through the coordinator — not direct messages between subagents ...."}, {"id": "batchMisuse", "g": 9, "q": ".... the work is urgent, or needs mid-request tool use or parallel subagents ....", "a": ".... the synchronous API, and several `Task` calls in one response — not the Message Batches API ...."}, {"id": "selfReview", "g": 9, "q": ".... the code just written needs a review ....", "a": ".... an independent reviewer in a separate session — not the same session reviewing itself ...."}, {"id": "stepProc", "g": 9, "q": ".... briefing a subagent that may hit unexpected cases ....", "a": ".... give the goal and the quality criteria — not a rigid step-by-step procedure ...."}, {"id": "oneTask", "g": 9, "q": ".... several independent subagent jobs should run in parallel ....", "a": ".... several `Task` calls in the same response — not one `Task`, and not several coordinators ...."}, {"id": "requiredMissing", "g": 10, "q": ".... a field is sometimes missing from the source document ....", "a": ".... make it nullable or optional — do not mark it required ...."}, {"id": "na", "g": 10, "q": ".... a value is not present ....", "a": ".... `null` — not a placeholder such as `N/A` ...."}, {"id": "freeText", "g": 10, "q": ".... a field has a small set of known categories ....", "a": ".... an enum, with `other` or `unclear` if needed — not a free-text string ...."}, {"id": "dropValidation", "g": 10, "q": ".... some documents fail validation because a field is missing ....", "a": ".... return null and send the record to human review — do not drop the validation rule ...."}, {"id": "postBlock", "g": 11, "q": ".... a forbidden command must not be allowed to run ....", "a": ".... a `PreToolUse` hook — not `PostToolUse` ...."}, {"id": "userLevel", "g": 11, "q": ".... a convention the whole team should follow ....", "a": ".... project-level config committed to the repo — not files under `~/.claude/` ...."}, {"id": "hardToken", "g": 11, "q": ".... an MCP server needs a credential ....", "a": ".... `${VAR}` in `.mcp.json` — not a real token committed to the repo ...."}, {"id": "regexMd", "g": 11, "q": ".... you need structured output from the model ....", "a": ".... `tool_use`, or `--output-format json` with `--json-schema` — not a regex over prose ...."}, {"id": "clear", "g": 11, "q": ".... the context is long, but the current work still matters ....", "a": ".... `/compact` — not `/clear` ...."}, {"id": "planSmall", "g": 11, "q": ".... a small, already well-scoped change ....", "a": ".... execute directly — not plan mode ...."}, {"id": "readAll", "g": 11, "q": ".... exploring a large or unfamiliar codebase ....", "a": ".... Glob or Grep for entry points, then Read selectively — not every file from the start ...."}, {"id": "copyMd", "g": 11, "q": ".... the same guidance should apply across packages in a monorepo ....", "a": ".... `.claude/rules/`, `@import`, or a `paths` glob — not a copied `CLAUDE.md` in every package ...."}, {"id": "staleResume", "g": 11, "q": ".... files or tool results have changed since the last session ....", "a": ".... start a new session and pass a structured summary — not `--resume` or a fork ...."}, {"id": "forkTools", "g": 11, "q": ".... a skill should have a smaller tool set ....", "a": ".... `allowed-tools` — not `context: fork` ...."}, {"id": "fixedOpen", "g": 12, "q": ".... the next step depends on what the investigation finds ....", "a": ".... adaptive decomposition — not a fixed sequence of steps ...."}, {"id": "adaptiveFixed", "g": 12, "q": ".... the procedure is already fixed and known ....", "a": ".... prompt chaining — not an adaptive planner ...."}, {"id": "anyPick", "g": 13, "q": ".... you want the model to pick the correct tool ....", "a": ".... fewer tools and clearer descriptions — `tool_choice: any` only forces some tool call ....", "note": "`any` is right when there are several schemas and the document type is not yet known."}, {"id": "autoForce", "g": 13, "q": ".... a tool call is required on this turn ....", "a": ".... `tool_choice: any`, or a forced tool — not `auto`, which can still return text only ...."}, {"id": "forceAll", "g": 13, "q": ".... you need one specific tool on the first turn, then a normal loop ....", "a": ".... force it on the first turn, then switch to `auto` — do not force it on every request ...."}, {"id": "limitN", "g": 14, "q": ".... a CI review is producing too much noise ....", "a": ".... clear report-or-skip criteria, or temporarily disable a noisy category — not a cap of N findings ...."}, {"id": "delComments", "g": 14, "q": ".... later reviews should not repeat comments that are already fixed ....", "a": ".... put prior findings in context and report only new or still-open issues — not deletion or exact-string deduping ...."}, {"id": "latestCommit", "g": 14, "q": ".... reviewing a pull request that has several commits ....", "a": ".... review the full change, and include prior findings — not only the latest commit ...."}];
+const FLASH_TABLES = [{"id": "skill-frontmatter", "title": "Frontmatter của skill", "rows": [["Input, parameters, arguments, autocomplete, prompt for a name or number", "`argument-hint`"], ["File path, glob, directory, file matching, only when these files are edited", "`paths`"], ["Permission, tools, Read, Grep, Bash, must never modify files or run shell", "`allowed-tools`"], ["Context overflow, isolated, verbose output, main session has lost room", "`context: fork`"]]}, {"id": "tool-choice", "title": "tool_choice", "rows": [["Conversational, may reply with text, use a tool only when needed", "`auto`"], ["A tool call is required, the model still picks which; document type unknown", "`any`"], ["The first turn must call one named tool, then the agent may reply with text", "forced tool, then `auto`"], ["`auto` is still returning text when a tool call must happen", "`any`, or force that tool"]]}, {"id": "session-commands", "title": "/compact, /clear, --resume, /memory", "rows": [["Session is full, the work is still going, keep the conclusions", "`/compact`"], ["Wipe context; the current work is no longer needed", "`/clear`"], ["Continue a previous session, and the files or tool results are still valid", "`--resume`"], ["Confirm which memory files are actually loaded in this session", "`/memory`"]], "note": "If files or tool results are already stale, do not use `--resume`. Start a new session and pass a structured summary."}, {"id": "grep-glob-read", "title": "Grep, Glob, Read", "rows": [["Find lines, imports, an error code, or other file contents", "Grep"], ["Find files by a path pattern, such as `**/migrations/*.sql`", "Glob"], ["Explore a large repo, then open only what you need", "Glob or Grep first, then Read selectively"], ["Read every file from the start, or use Glob to search line contents", "not this"]]}, {"id": "guarantees", "title": "Khi đề đòi bảo đảm", "rows": [["must, never, guaranteed, a forbidden command must not run", "`PreToolUse` hook or a programmatic gate"], ["Block the command with `PostToolUse`", "too late; use `PreToolUse`"], ["Add a prompt rule, a `CLAUDE.md` line, capitals, or few-shot for a must-never rule", "not enough; enforce it in code"], ["Lower the temperature so the answer is guaranteed", "not enough; use a schema, hook, or gate"]]}, {"id": "errors-retry", "title": "Lỗi, retry và dữ liệu thiếu", "rows": [["Timeout or a transient failure", "`isError: true`, `isRetryable: true`"], ["Policy, compliance, or a business-rule error", "`isRetryable: false`, plus an explanation"], ["The value is not in the source documents", "return `null`, make the field nullable, mark the gap"], ["A tool fails, and an empty success would mislead the next step", "a structured error, keep the original value"]]}, {"id": "sources", "title": "Số liệu và nguồn", "rows": [["Two sources disagree on a figure", "keep both, with sources and dates"], ["Average them, pick one, or take the larger value", "no; annotate both for the coordinator"], ["A fact is missing; guess or use general knowledge", "ask, re-delegate, or state the gap"], ["A placeholder such as `N/A`, or a required field that may be absent", "`null`; make the field optional"]]}, {"id": "escalate", "title": "Escalate và bàn giao", "rows": [["The customer asked to speak to a person", "escalate immediately"], ["The customer is frustrated but has not asked for a person", "not automatic; escalate if there is a policy gap or no progress"], ["A follow-up question or the agent itself can finish the case", "resolve it; do not escalate yet"], ["Handing the case to a human", "a structured summary (ID, cause, amounts, action), not the raw transcript"]]}, {"id": "subagents", "title": "Subagent và chạy song song", "rows": [["A subagent needs facts from the parent conversation", "put them in the launch prompt; it does not inherit history"], ["Several subagents work on one job", "hub-and-spoke through the coordinator, not peer messages"], ["Independent jobs should run in parallel", "several `Task` calls in one response"], ["The coordinator never spawns subagents and tries the work itself", "check that its `allowedTools` includes `Task`"]]}, {"id": "batches", "title": "Message Batches API", "rows": [["Matching batch results after the order changes", "`custom_id`"], ["An SLA of about 26–30 hours, and a batch can take 24 hours", "submit every few hours, not once a day"], ["Some items succeeded and others failed", "resume and resubmit only the failures"], ["Urgent work, mid-request tools, or parallel subagents", "the synchronous API, not the Batches API"]]}, {"id": "team-config", "title": "Cấu hình team và secret", "rows": [["A convention the whole team should follow", "project-level config, committed to the repo"], ["A personal skill that must not affect anyone else", "`~/.claude/skills/`, under a different name"], ["The same guidance across packages, without copied `CLAUDE.md` files", "`.claude/rules/`, `@import`, or a `paths` glob"], ["An MCP server needs a credential", "`${VAR}` in `.mcp.json`, not a real token in the repo"]]}, {"id": "ci", "title": "CI và job tự động", "rows": [["The job hangs in CI or cron, waiting for a confirmation", "`-p` (non-interactive)"], ["Output must be parsed reliably", "`--output-format json` with `--json-schema`"], ["Parse prose with a regex or with Markdown headings", "not reliable"], ["A `CLAUDE.md` line saying not to ask for confirmation", "not the first fix for a hang"]]}, {"id": "review", "title": "Review", "rows": [["The code just written needs a review", "an independent reviewer in a separate session"], ["A CI review is too noisy", "report-or-skip criteria, or disable a noisy category; not a cap of N"], ["Later reviews should not repeat comments that are already fixed", "prior findings in context; not exact-string deduping"], ["A pull request has several commits", "review the full change, not only the latest commit"]]}, {"id": "plan-explore", "title": "Plan mode và khám phá", "rows": [["A small, already well-scoped change", "direct execution"], ["A large change, and you want to agree on a plan first", "plan mode"], ["Verbose discovery that should not fill the main session", "the Explore subagent, often with plan mode"], ["Read dozens of files into the main session first", "no; search, then Read selectively"]]}, {"id": "schema", "title": "Schema trích xuất", "rows": [["A field is sometimes missing from the source", "nullable or optional, not required"], ["A value is not present", "`null`, not `N/A`"], ["A small set of known categories", "an enum, with `other` or `unclear` if needed"], ["Documents fail validation because a field is missing", "return null and send them to human review; do not drop the rule"]]}, {"id": "wrong-tool", "title": "Khi agent chọn sai tool", "rows": [["The model confuses two tools", "rename, split, or write clearer descriptions; do not merge them"], ["The first fix when the wrong tool is chosen", "fix the description or the design, not a router and not list order"], ["You want an MCP tool used instead of a built-in one", "rewrite the MCP description; do not disable the built-in tool"], ["A keyword-style system prompt is overriding tool descriptions", "revise that prompt first"]]}, {"id": "reliability", "title": "Độ tin cậy và MCP resource", "rows": [["A slowly changing catalog or wiki hierarchy, wasted exploratory calls", "expose it as an MCP resource"], ["The model drops instructions, or the workflow design is the real problem", "split, trim, or keep case facts; not a larger model or window"], ["`stop_reason` is `max_tokens`, or the output was cut off", "raise `max_tokens`"], ["Self-reported confidence, or overall accuracy looks high enough to drop review", "calibrate on labeled data; break accuracy down by type and field"]]}];
 let flashOpen = false;
-let F = loadFlash();
 
-function defaultFlash() {
-  return { group: -1, i: 0, order: FLASH_CARDS.map((_, n) => n) };
-}
-function loadFlash() {
-  try {
-    const v = JSON.parse(localStorage.getItem(FLASH_KEY));
-    if (!v || !Array.isArray(v.order) || !v.order.length) return defaultFlash();
-    const group = Number.isInteger(+v.group) ? +v.group : -1;
-    return { group: group >= -1 && group < FLASH_GROUPS.length ? group : -1, i: Math.max(0, +v.i || 0), order: v.order };
-  } catch (e) { return defaultFlash(); }
-}
-function saveFlash() { try { localStorage.setItem(FLASH_KEY, JSON.stringify(F)); } catch (e) {} }
-function flashPool() {
-  const idx = FLASH_CARDS.map((c, i) => i).filter(i => F.group < 0 || FLASH_CARDS[i].g === F.group);
-  const kept = F.order.filter(i => idx.includes(i));
-  return kept.length === idx.length ? kept : idx;
-}
-function flashCount() { return flashPool().length; }
-function flashCard() {
-  const pool = flashPool();
-  if (!pool.length) return null;
-  if (F.i < 0 || F.i >= pool.length) F.i = 0;
-  return FLASH_CARDS[pool[F.i]];
-}
 function openFlash() {
   flashOpen = true;
   try { location.replace("#flash"); } catch (e) { location.hash = "flash"; }
@@ -3553,60 +3531,34 @@ function closeFlash() {
   render();
   window.scrollTo(0, 0);
 }
-function setFlashFilter(group) {
-  F.group = group;
-  F.i = 0;
-  saveFlash();
-  render();
-}
-function goFlash(delta) {
-  const n = flashCount();
-  if (!n) return;
-  F.i = (F.i + delta + n) % n;
-  saveFlash();
-  render();
-}
-function shuffleFlash() {
-  const pool = flashPool().slice();
-  F.order = shuffled(pool.length, Math.random).map(k => pool[k]);
-  F.i = 0;
-  saveFlash();
-  render();
-}
 function flashStatus() {
-  return { cls: "", text: FLASH_CARDS.length + " recurring pairs · all 6 exams" };
+  return { cls: "", text: FLASH_TABLES.length + " bảng · học 1 được 4" };
+}
+function flashTable(t, n) {
+  const rows = t.rows.map(([q, a]) => `<tr><td>${fmt(q)}</td><td>${fmt(a)}</td></tr>`).join("");
+  const note = t.note ? `<p class="diffnote">${fmt(t.note)}</p>` : "";
+  return `<section class="diffblock" id="diff-${t.id}">
+    <h2>${n}. ${esc(t.title)}</h2>
+    <div class="tblwrap"><table class="tbl difftable">
+      <tr><th>Từ khóa trong đề bài</th><th>Đáp án</th></tr>
+      ${rows}
+    </table></div>
+    ${note}
+  </section>`;
 }
 function flashView() {
-  const n = flashCount();
-  const card = flashCard();
-  const filters = `<div class="filters"><button class="chip" data-fg="-1" aria-pressed="${F.group < 0}">All patterns (${FLASH_CARDS.length})</button>${FLASH_GROUPS.map((g, i) => `<button class="chip" data-fg="${i}" aria-pressed="${F.group === i}">${esc(g.chip)} (${FLASH_CARDS.filter(c => c.g === i).length})</button>`).join("")}</div>`;
-  if (!card) {
-    return `<div class="hero"><div class="wrap"><div class="eyebrow">CCAR-F practice · English</div><h1>Flashcards</h1><div class="actions"><button class="btn" id="flashhome">Back to exam list</button></div></div></div><main class="wrap start"><p>No cards in this filter.</p></main>`;
-  }
-  const groupName = FLASH_GROUPS[card.g].name;
-  const note = card.note ? `<p class="flashnote">${fmt(card.note)}</p>` : "";
+  const chips = `<div class="filters">${FLASH_TABLES.map(t => `<button class="chip" data-diff="${t.id}">${esc(t.title)}</button>`).join("")}</div>`;
   return `<div class="hero"><div class="wrap">
-      <div class="eyebrow">CCAR-F practice · English</div>
-      <h1>Flashcards</h1>
-      <p class="lead">Each card is a pair that shows up often across the six exams: the pattern in the question, then the pattern in the answer. Both stay visible.</p>
+      <div class="eyebrow">CCAR-F practice</div>
+      <h1>Bảng phân biệt nhanh để đi thi</h1>
+      <p class="lead">Mỗi bảng là một cụm đáp án dễ nhầm trên cả sáu đề. Cột trái là từ khóa thường gặp trong câu hỏi, cột phải là đáp án. Học một bảng được cả bốn.</p>
       <div class="actions">
-        <button class="btn" id="flashshuffle">Shuffle</button>
-        <button class="btn" id="flashhome">Back to exam list</button>
+        <button class="btn" id="flashhome">Về danh sách đề</button>
       </div>
     </div></div>
     <main class="wrap start flashwrap">
-      ${filters}
-      <p class="flashmeta">${esc(groupName)} · ${F.i + 1} / ${n}</p>
-      <div class="flashcard">
-        <div class="flashpair flashq"><b>In the question</b><p>${fmt(card.q)}</p></div>
-        <div class="flashpair flasha"><b>In the answer</b><p>${fmt(card.a)}</p></div>
-        ${note}
-      </div>
-      <div class="navrow flashnav">
-        <button class="btn" id="flashprev" ${n < 2 ? "disabled" : ""}>Previous</button>
-        <span class="spacer"></span>
-        <button class="btn primary" id="flashnext" ${n < 2 ? "disabled" : ""}>Next</button>
-      </div>
+      ${chips}
+      ${FLASH_TABLES.map((t, i) => flashTable(t, i + 1)).join("")}
     </main>`;
 }
 
@@ -3633,7 +3585,7 @@ function startView() {
     </div></div>
     <main class="wrap start">
     <section><h2>Chọn đề</h2><div class="setgrid">${SETS.map(x => { const st = setStatus(x.id); return `<button class="setcard" data-set="${x.id}" aria-pressed="${x.id === setId}"><b>Đề ${x.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${scenOrder(x.Q).map(k => SCEN_SHORT[k]).join(" · ")}</span></button>`; }).join("")}</div></section>
-    <section><h2>Practice</h2><div class="setgrid"><button class="setcard" id="openflash" aria-pressed="false"><b>Flashcards</b><span class="setstat">${flashStatus().text}</span><span class="setscen">In the question, then in the answer · English</span></button></div></section>
+    <section><h2>Practice</h2><div class="setgrid"><button class="setcard" id="openflash" aria-pressed="false"><b>Bảng phân biệt nhanh</b><span class="setstat">${flashStatus().text}</span><span class="setscen">Từ khóa trong đề bài → đáp án</span></button></div></section>
     ${syncView()}
     <div class="cols">
       <section><h2>Cấu trúc bài thi</h2>
@@ -3981,15 +3933,15 @@ function tick() {
 app.addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
   if (t.dataset.go !== undefined) return go(+t.dataset.go);
-  if (t.dataset.fg !== undefined) return setFlashFilter(+t.dataset.fg);
+  if (t.dataset.diff !== undefined) {
+    document.getElementById("diff-" + t.dataset.diff)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    return;
+  }
   if (t.dataset.f) { reviewFilter = t.dataset.f; return render(); }
   if (t.dataset.set) return selectSet(+t.dataset.set);
   switch (t.id) {
     case "openflash": return openFlash();
     case "flashhome": return closeFlash();
-    case "flashshuffle": return shuffleFlash();
-    case "flashprev": return goFlash(-1);
-    case "flashnext": return goFlash(1);
     case "begin": delete app.dataset.home; return begin();
     case "resume": case "viewresult": delete app.dataset.home; render(); window.scrollTo(0, 0); return;
     case "home": case "home2": app.dataset.home = "1"; render(); window.scrollTo(0, 0); return;
@@ -4023,9 +3975,6 @@ app.addEventListener("change", e => {
 });
 document.addEventListener("keydown", e => {
   if (e.key === "Escape" && modal) { modal = false; render(); return; }
-  if (!flashOpen) return;
-  if (e.key === "ArrowLeft") { e.preventDefault(); goFlash(-1); }
-  else if (e.key === "ArrowRight") { e.preventDefault(); goFlash(1); }
 });
 
 if (S.phase !== "start") app.dataset.home = "1";
