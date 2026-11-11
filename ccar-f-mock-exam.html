@@ -259,6 +259,8 @@ details.sheetx[open] > summary { margin-bottom: 8px; }
 .difflinks .lbl { color: var(--muted); font-size: 16px; font-weight: 600; }
 a.diffjump { border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 4px 12px; font: 600 16px var(--sans); cursor: pointer; text-decoration: none; display: inline-block; }
 a.diffjump:hover { background: var(--accent); color: var(--accent-ink); }
+mark.kw { background: #ffe566; color: inherit; padding: 0 .12em; border-radius: 2px; font-weight: inherit; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+
 
 @media (max-width: 860px) {
   .difftable th:last-child, .difftable td:last-child { width: auto; }
@@ -3681,6 +3683,343 @@ function flashHref(ids, focusId) {
   u.hash = ordered.length ? "#flash/" + ordered.join(",") : "#flash";
   return u.href;
 }
+const KW_RE = {
+  "skill-frontmatter": [
+    /main session has lost room/i,
+    /main conversation has lost focus(?: and is short on context)?/i,
+    /short on context/i,
+    /loaded only when such files are being edited/i,
+    /load only while someone edits/i,
+    /only when (?:such|these) files are being edited/i,
+    /should be loaded only when/i,
+    /prompted for an? [a-z ]+ if they run it without/i,
+    /invokes it with no arguments/i,
+    /with no arguments they should be told/i,
+    /must never (?:be able to )?(?:modify files or run shell commands|run destructive shell commands)/i,
+    /load only when/i,
+    /should not edit any files/i,
+    /must prompt for a \w+ when invoked without/i,
+    /invoked without one/i,
+    /see what they are expected to provide/i,
+    /ask for a module name/i,
+    /never run shell commands/i,
+    /without its log output accumulating in the session/i,
+    /long, speculative discussion/i,
+    /produces a long report/i,
+    /read-only and must prompt/i,
+    /active when editing/i,
+    /same conventions must also apply/i,
+  ],
+  "tool-choice": [
+    /tool_choice/i,
+    /first model action in every new conversation must be a call/i,
+    /must always run `\w+` before any other tool on its first turn/i,
+    /must always run `\w+` before any enrichment tools/i,
+    /document(?:'s)? type is unknown/i,
+    /do not know a document's type/i,
+    /no conversational reply/i,
+    /instead of conversational text/i,
+    /freely choose among tools or respond with text/i,
+    /then choose freely among other tools afterward/i,
+    /must return a tool call and never a conversational reply/i,
+    /choose among three schemas based on the document/i,
+    /must always be processed by exactly the `[^`]+` tool/i,
+    /upstream classifier has already confirmed the type/i,
+  ],
+  "session-commands": [
+    /\/compact|\/clear|\/memory|--resume/i,
+    /named (?:research |Claude Code )?session/i,
+    /documents were revised/i,
+    /files were changed by a teammate/i,
+    /renamed most schema files and changed their field structures/i,
+    /moved most of the files/i,
+    /earlier tool results no longer describe the code/i,
+    /follows .{0,80} in some sessions but ignores it in others/i,
+    /approaching context limits/i,
+    /survive a crash of the coordinating process/i,
+    /Nothing in that part of the code has changed since/i,
+    /session you named/i,
+    /confirm the file is actually in effect for the session/i,
+    /session fills up with verbose search output/i,
+    /work is still ongoing and the conclusions so far are important/i,
+  ],
+  "grep-glob-read": [
+    /uses built-in tools/i,
+    /\bGrep\b/,
+    /\bGlob\b/,
+    /files named `[^`]+`/i,
+    /every `[^`]+` file/i,
+    /all `[^`]+` files/i,
+    /every place that calls/i,
+    /find which of them mention/i,
+    /read every file|read all (?:of )?(?:the )?(?:repository|files)|reading all \d+ files/i,
+  ],
+  "guarantees": [
+    /enforced programmatically instead of through system prompt instructions/i,
+    /must never (?:be able to )?(?:modify files or run shell commands|run destructive shell commands)/i,
+    /this must be guaranteed/i,
+    /must be guaranteed/i,
+    /guaranteed structured output/i,
+    /must not be allowed to run/i,
+    /forbidden command/i,
+    /PostToolUse/i,
+    /PreToolUse/i,
+    /prompt already says/i,
+    /even though the (?:system )?prompt/i,
+    /must never execute `[^`]+`/i,
+    /must never run `[^`]+`/i,
+    /must never modify files/i,
+    /must never exceed/i,
+    /enforced programmatically and not only through instructions/i,
+    /Prompt instructions have failed/i,
+    /must only run after two-factor verification/i,
+  ],
+  "errors-retry": [
+    /returns the text "[^"]+" for every failure/i,
+    /retries three times/i,
+    /currently retries both/i,
+    /retries both/i,
+    /empty list both when/i,
+    /identical empty response/i,
+    /database connection times out/i,
+    /payment service timed out/i,
+    /return window has expired/i,
+    /past the return window/i,
+    /order not found/i,
+    /database unreachable/i,
+    /document ID is malformed/i,
+    /caller lacks permission/i,
+    /isRetryable`? false/i,
+    /branch name contains a space/i,
+    /returns an empty owner list/i,
+    /empty list when the ownership service is down/i,
+    /isRetryable: false, category: validation/i,
+    /\{\s*"items":\s*\[\]\s*\}/i,
+    /with success status/i,
+  ],
+  "sources": [
+    /returns three accounts/i,
+    /returns two people/i,
+    /returns three records/i,
+    /selects the account with the most recent activity/i,
+    /one has a recent order/i,
+    /industry report says the market grew [^,;]+; a government dataset covering the same period says [^.]+\./i,
+    /Two credible studies give [^ ]+ and [^ ]+ for the same/i,
+    /two contracts specify different/i,
+    /two sources disagree/i,
+  ],
+  "escalate": [
+    /has not asked for a person/i,
+    /asked to speak to a person/i,
+    /(?:wants to )?talk to someone/i,
+    /I want to talk to someone/i,
+    /no access to the conversation transcript/i,
+    /cannot see the conversation transcript/i,
+    /re-asking the customer for details/i,
+    /should cause the agent to escalate/i,
+    /should trigger escalation/i,
+    /escalates a disputed refund/i,
+    /each escalated case/i,
+    /Get me a person right now/i,
+    /I don't want a bot/i,
+    /escalation rules/i,
+    /has no access to the agent's history/i,
+  ],
+  "subagents": [
+    /long numbered procedures/i,
+    /contain numbered procedures/i,
+    /send its results straight/i,
+    /never spawns any of them and instead tries the work itself/i,
+    /told it only `[^`]+`/i,
+    /does not inherit/i,
+    /hub-and-spoke/i,
+    /peer messages/i,
+    /unable to delegate/i,
+    /run concurrently/i,
+    /allowedTools` of/i,
+  ],
+  "batches": [
+    /Message Batches API/i,
+    /within 30 hours/i,
+    /up to 24 hours(?: per batch)?/i,
+    /meets this SLA/i,
+    /\b\d+ requests failed\b/i,
+    /\d+ failed because they exceeded context limits/i,
+    /pre-merge checks that block developers/i,
+    /nightly security audit/i,
+    /has no urgency/i,
+    /one interactive answer within seconds/i,
+    /output order differs from the input order/i,
+  ],
+  "team-config": [
+    /~\/\.claude\/CLAUDE\.md/i,
+    /~\/\.claude/i,
+    /\.mcp\.json/i,
+    /\$\{VAR\}|\.claude\/rules\/|@import/i,
+    /whole team needs the same/i,
+    /without exposing credentials/i,
+    /personal skill that must not affect anyone else/i,
+    /must not affect anyone else/i,
+    /after cloning the repository/i,
+    /colleague's `~\/\.claude/i,
+    /loaded only when such files are being edited/i,
+    /every session loads guidance unrelated/i,
+    /different packages follow different standards/i,
+    /Credentials must not be committed/i,
+    /load only when/i,
+    /has grown to \d+ lines/i,
+    /without affecting anyone else/i,
+    /personally want a variant/i,
+    /nobody else should see/i,
+    /private `\/[^`]+` command/i,
+    /reused in two packages/i,
+    /only apply in one/i,
+    /CI-invoked Claude Code needs the team's/i,
+    /applies only to files under/i,
+    /team's `CLAUDE\.md` setup/i,
+  ],
+  "ci": [
+    /works on a developer's laptop, but in CI the job hangs[^.]*\./i,
+    /stalls until the runner's timeout because it is waiting for a confirmation/i,
+    /hangs waiting for input/i,
+    /hangs until the 30-minute timeout/i,
+    /waiting for a confirmation/i,
+    /waiting for input/i,
+    /reliably read each finding's file, line, severity, and message/i,
+    /downstream tooling cannot parse its output reliably/i,
+    /posted automatically as inline pull request comments/i,
+    /works when run by hand but hangs under cron/i,
+    /--output-format json/i,
+    /--json-schema/i,
+    /reliable automated parsing/i,
+    /generates code and then reviews the pull request/i,
+  ],
+  "review": [
+    /in the same session, asks Claude to "[^"]+"/i,
+    /in the same session, you ask it to review its work/i,
+    /in the same session/i,
+    /asks that session to review/i,
+    /same comments reappear even when issues have been addressed/i,
+    /same comments reappear/i,
+    /ignoring all review output/i,
+    /ignoring all flags/i,
+    /reviewers have started ignoring/i,
+    /only the latest commit/i,
+    /critically review your implementation/i,
+    /reposts many of the same comments/i,
+    /false positives/i,
+    /already been fixed/i,
+    /receives only the current diff/i,
+    /only report findings you are at least 90% confident about/i,
+    /False positives barely change/i,
+    /too many false positives/i,
+    /extended thinking can replace its independent review instance/i,
+  ],
+  "plan-explore": [
+    /plan mode rather than direct execution/i,
+    /start in plan mode/i,
+    /plan mode/i,
+    /direct execution/i,
+    /reads dozens of files during discovery and runs out of context/i,
+    /nearly out of context/i,
+    /pages of file listings and search output/i,
+    /After a design is agreed/i,
+    /Explore subagent/i,
+    /The fix is a one-line guard/i,
+    /existing tests cover the function/i,
+    /without filling your main session with search output/i,
+    /agree on a plan before/i,
+    /several workable designs/i,
+    /several boundaries are possible/i,
+    /several rollout options/i,
+  ],
+  "schema": [
+    /as free text/i,
+    /free-text/i,
+    /placeholder such as `?N\/A`?/i,
+    /\bN\/A\b/i,
+    /nullable/i,
+    /required field/i,
+    /enum value|an enum/i,
+    /fail validation because a field is missing/i,
+  ],
+  "wrong-tool": [
+    /The system prompt includes: "[^"]+"/i,
+    /well-differentiated descriptions/i,
+    /has 18 tools/i,
+    /has 22 tools/i,
+    /(?:Tool selection|selection) accuracy has dropped/i,
+    /wrong mode is often selected/i,
+    /has full web search/i,
+    /keyword-style (?:wording|system prompt)/i,
+    /keyword-driven system prompt/i,
+    /Always grep before/i,
+    /disable the built-in/i,
+    /often picks the wrong mode/i,
+    /results frequently come from the wrong scope/i,
+  ],
+  "reliability": [
+    /97% accuracy overall/i,
+    /Overall extraction accuracy is 97%/i,
+    /98% accuracy/i,
+    /eliminating human review for all documents/i,
+    /remove human review of high-confidence results/i,
+    /reduce human review/i,
+    /auto-approve high-confidence extractions/i,
+    /high-confidence/i,
+    /discover which internal reports exist/i,
+    /exploring what schemas exist/i,
+    /spends many turns calling/i,
+    /spends many calls exploring/i,
+    /stop_reason` is `max_tokens/i,
+    /output was cut off/i,
+    /self-reported confidence/i,
+    /examine only 10% of extractions/i,
+    /direct them where they are most needed/i,
+    /listing wiki spaces and pages/i,
+    /page hierarchy changes slowly/i,
+    /which internal datasets exist/i,
+    /many exploratory queries/i,
+    /discovering which internal reports exist/i,
+    /error rate among auto-approved extractions/i,
+    /across rare document types/i,
+    /stratified/i,
+  ],
+};
+
+function kwSpans(text, ids) {
+  const raw = [];
+  for (const id of ids || []) {
+    for (const re of (KW_RE[id] || [])) {
+      const r = new RegExp(re.source, re.flags.includes("g") ? re.flags : re.flags + "g");
+      let m;
+      while ((m = r.exec(text))) {
+        const start = m.index, end = start + m[0].length;
+        if (end > start) raw.push({ start, end });
+        if (!m[0].length) r.lastIndex++;
+      }
+    }
+  }
+  raw.sort((a, b) => (b.end - b.start) - (a.end - a.start) || a.start - b.start);
+  const spans = [];
+  for (const s of raw) {
+    if (!spans.some(t => s.start < t.end && s.end > t.start)) spans.push(s);
+  }
+  return spans.sort((a, b) => a.start - b.start);
+}
+function fmtStemKw(text, ids) {
+  const src = String(text);
+  const spans = kwSpans(src, ids);
+  if (!spans.length) return fmt(src);
+  let out = "", i = 0;
+  for (const s of spans) {
+    out += fmt(src.slice(i, s.start));
+    out += `<mark class="kw">${fmt(src.slice(s.start, s.end))}</mark>`;
+    i = s.end;
+  }
+  return out + fmt(src.slice(i));
+}
+
 function flashTable(t, n) {
   const rows = t.rows.map(([q, a]) => `<tr><td>${fmt(q)}</td><td>${fmt(a)}</td></tr>`).join("");
   const note = t.note ? `<p class="diffnote">${fmt(t.note)}</p>` : "";
@@ -3865,7 +4204,7 @@ function resultView() {
     const mark = x.ok ? `<span class="mark ok">Đúng</span>` : x.blank ? `<span class="mark blank">Bỏ trống</span>` : `<span class="mark no">Sai</span>`;
     const diffs = tablesFor(q);
     const diffLinks = diffs.length ? `<p class="difflinks"><span class="lbl">Bảng phân biệt:</span>${diffs.map(id => `<a class="diffjump" href="${esc(flashHref(diffs, id))}" target="_blank" rel="noopener">${esc(flashTitle(id))}</a>`).join("")}</p>` : "";
-    const stem = diffs.length ? `<p class="stem hasdiff"><a href="${esc(flashHref(diffs))}" target="_blank" rel="noopener">${fmt(q.q)}</a></p>` : `<p class="stem">${fmt(q.q)}</p>`;
+    const stem = diffs.length ? `<p class="stem hasdiff"><a href="${esc(flashHref(diffs))}" target="_blank" rel="noopener">${fmtStemKw(q.q, diffs)}</a></p>` : `<p class="stem">${fmt(q.q)}</p>`;
     return `<article class="rev"><div class="top">${mark}<b>Câu ${x.index + 1}</b><span>Task ${q.t}</span><span>${esc(SCENARIOS[q.s].name)}</span>${q.a.length > 1 ? `<span>Select ${COUNT[q.a.length]}</span>` : ""}</div>
       ${stem}${diffLinks}<div class="ro">${ro}</div><p class="exp">${fmt(q.e)}</p></article>`;
   }).join("");
