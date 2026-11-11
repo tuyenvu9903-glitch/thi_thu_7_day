@@ -241,6 +241,18 @@ details.sheetx[open] > summary { margin-bottom: 8px; }
   .ro .why { grid-column: 2; }
 }
 @media (prefers-reduced-motion: no-preference) { .opt, .btn, .cell, .chip { transition: border-color .12s, background .12s, color .12s; } }
+
+.lockbox { background: var(--warn-soft); border-radius: 8px; padding: 12px 16px; margin: 0 0 14px; }
+.lockbox b { display: block; font: 600 16px var(--display); color: var(--warn); margin-bottom: 2px; }
+.exp.lockexp::before { content: "Why this answer"; }
+.opt.is { background: var(--good-soft); border-color: var(--good); box-shadow: inset 0 0 0 1px var(--good); }
+.opt.is .ltr { background: var(--good); border-color: var(--good); color: var(--accent-ink); }
+.opt.wrongpick { background: var(--bad-soft); border-color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad); }
+.opt.wrongpick .ltr { background: var(--bad); border-color: var(--bad); color: var(--accent-ink); }
+.cell.ok { background: var(--good); border-color: var(--good); color: var(--accent-ink); }
+.cell.no { background: var(--bad); border-color: var(--bad); color: var(--accent-ink); }
+.legend .ok { background: var(--good); }
+.legend .no { background: var(--bad); }
 </style>
 
 <div id="app"></div>
@@ -3497,6 +3509,739 @@ function toggle(optIdx) {
   S.answers[S.cur] = sel; save(); render(`o${optIdx}`);
 }
 
+const DRILL_KEY = "ccarf-lock-drill-v1";
+const DRILL_ITEMS = [
+  {
+    "q": "The team must decide where to put two things: `every function needs a docstring`, and a rarely used 12-step data-backfill procedure. Which TWO decisions are correct?",
+    "o": [
+      "Put the docstring standard in `CLAUDE.md`, because it should be loaded and applied in all sessions.",
+      "Package the backfill procedure as a skill, because it is a task-specific workflow invoked on demand.",
+      "Put the backfill procedure in `CLAUDE.md`, so that it will be available if somebody needs it someday.",
+      "Package the docstring standard as a skill, so that developers can invoke it only when writing functions.",
+      "Put both of them in `~/.claude/CLAUDE.md`, because each engineer should own their working practices."
+    ],
+    "a": [
+      0,
+      1
+    ],
+    "lock": "`every function needs a docstring` versus a rarely used 12-step data-backfill procedure",
+    "rationale": "A standing standard belongs in `CLAUDE.md` so every session loads it. A rarely used procedure belongs in a skill. Do not put both in `~/.claude/CLAUDE.md`.",
+    "domain": "3. Claude Code Configuration & Workflows",
+    "scenario": "Code Generation with Claude Code"
+  },
+  {
+    "q": "You are adding caching to a service in an area of the stack that your team has not used before. You suspect that there are failure modes you have not considered. What should you do before implementation?",
+    "o": [
+      "Use the interview pattern and have Claude ask questions that surface considerations such as invalidation and failure modes.",
+      "Give Claude a detailed specification based on your best guess, and correct anything that seems wrong after it is built.",
+      "Ask Claude to implement three caching designs in parallel and then choose whichever one seems to perform the best.",
+      "Enable extended thinking, and instruct Claude to implement the most robust design that it is able to come up with."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "an area of the stack that your team has not used before, and failure modes you have not considered",
+    "rationale": "Use the interview pattern so Claude asks about unknown failure modes before implementation. Do not write a guessed spec and fix it afterward.",
+    "domain": "3. Claude Code Configuration & Workflows",
+    "scenario": "Code Generation with Claude Code"
+  },
+  {
+    "q": "A team skill called `/audit-deps` reads hundreds of files and prints a long report. After running it, developers find that their main session has lost room for its current task. Which frontmatter option addresses this?",
+    "o": [
+      "`context: fork`, which runs the skill in an isolated sub-agent context.",
+      "`allowed-tools`, limiting the skill to the Read and Grep tools only.",
+      "`argument-hint`, asking the developer which dependency to audit first.",
+      "`paths`, limiting the skill to dependency manifests in the repository."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "a long report, and the main session has lost room for its current task",
+    "rationale": "Use `context: fork` so the skill runs in an isolated sub-agent context. `argument-hint` does not protect the main session's context.",
+    "domain": "3. Claude Code Configuration & Workflows",
+    "scenario": "Code Generation with Claude Code"
+  },
+  {
+    "q": "You ask Claude Code to explain how refunds flow through an unfamiliar repository of 4,000 files. Which TWO steps reflect the recommended way of building understanding?",
+    "o": [
+      "Start with Grep to locate entry points, such as the refund handler and related error messages.",
+      "Use Read to follow the imports from those entry points and trace the flow through the code.",
+      "Use Read to load all 4,000 files at the start, so that nothing relevant is left out of context.",
+      "Use Glob to search within file contents for references to the words `refund` and `chargeback`.",
+      "Use Write to add logging statements across the repository so that the flow can be inferred later."
+    ],
+    "a": [
+      0,
+      1
+    ],
+    "lock": "building understanding in an unfamiliar repository of 4,000 files",
+    "rationale": "Start with Grep to find entry points, then Read along the imports. Do not add logging with Write just to infer the flow later.",
+    "domain": "2. Tool Design & MCP Integration",
+    "scenario": "Code Generation with Claude Code"
+  },
+  {
+    "q": "You need to split a monolith's billing logic into a separate service. Several boundaries are possible, and the wrong choice would be costly. After a design is agreed, implementation is straightforward. What is the best workflow?",
+    "o": [
+      "Use plan mode to investigate and agree on the design, then use direct execution to implement the plan.",
+      "Use direct execution throughout, and rely on version control to undo any decisions that turn out badly.",
+      "Use plan mode for the entire effort, including every file edit, so nothing happens without a fresh plan.",
+      "Use an Explore subagent to make the boundary decision, then ask it to implement the change by itself."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "the wrong choice would be costly, and after a design is agreed, implementation is straightforward",
+    "rationale": "Use plan mode to agree on the design, then direct execution to implement it. Do not let an Explore subagent both decide and implement.",
+    "domain": "3. Claude Code Configuration & Workflows",
+    "scenario": "Code Generation with Claude Code"
+  },
+  {
+    "q": "Your team maintains a list of Claude Code jobs and wants to standardize how each is broken down. Which TWO jobs are the best fit for a fixed sequential prompt chain?",
+    "o": [
+      "Generating reference documentation for each module, followed by a pass that builds a single index page.",
+      "Reviewing each changed file for local defects, followed by one integration pass over cross-file behavior.",
+      "Tracking down an intermittent memory leak whose cause and affected components are still entirely unknown.",
+      "Adding meaningful tests to an undocumented legacy service where risk areas have not yet been identified.",
+      "Investigating why deploys slow down on some days, where each finding determines what to examine next."
+    ],
+    "a": [
+      0,
+      1
+    ],
+    "lock": "a fixed sequential prompt chain",
+    "rationale": "Choose jobs whose steps are known in advance, such as docs then an index, or per-file review then an integration pass. Do not choose investigative work where the next step depends on unknown risks.",
+    "domain": "1. Agentic Architecture & Orchestration",
+    "scenario": "Code Generation with Claude Code"
+  },
+  {
+    "q": "A legacy module `api/client.ts` re-exports `send` under the aliases `post` and `dispatch`, and other wrappers rename them again. You need to find every real caller before changing its signature. What is the most reliable approach?",
+    "o": [
+      "Identify all exported names across the wrapper modules first, then Grep the codebase for each of those names.",
+      "Grep only for `send`, because every alias eventually resolves to that function when the code is finally compiled.",
+      "Use Glob on `**/*client*`, because any file that calls the function will contain the word `client` in its path.",
+      "Read each source file in the repository from the top so that no call site can escape the investigation."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "`send` is re-exported as `post` and `dispatch`, and other wrappers rename them again",
+    "rationale": "Collect every exported name first, then Grep for each name. Glob on `**/*client*` only matches paths, not callers.",
+    "domain": "2. Tool Design & MCP Integration",
+    "scenario": "Code Generation with Claude Code"
+  },
+  {
+    "q": "A bug report includes a stack trace pointing to one null dereference in `parseHeader`. The fix is a one-line guard, and existing tests cover the function. How should you proceed?",
+    "o": [
+      "Use direct execution, because the change is small, its scope is clear, and tests can verify it.",
+      "Use plan mode, because any production bug deserves a written plan before code is modified.",
+      "Spawn an Explore subagent to map the whole repository before touching the single function.",
+      "Start a forked session so that the one-line guard can be compared against other approaches."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "a one-line guard, and existing tests cover the function",
+    "rationale": "Use direct execution: the change is small, the scope is clear, and tests can verify it. A forked session to compare approaches is unnecessary.",
+    "domain": "3. Claude Code Configuration & Workflows",
+    "scenario": "Code Generation with Claude Code"
+  },
+  {
+    "q": "You return after a long weekend to a session that analyzed a service. Since then, a large refactor has moved most of the files, so its earlier tool results no longer describe the code. What is the most reliable way to continue?",
+    "o": [
+      "Start a new session and inject a structured summary of still-valid conclusions from the earlier work.",
+      "Resume the session with `--resume`, and tell it to ignore anything that no longer looks correct.",
+      "Use `fork_session` so that the outdated tool results are removed from the branch that is created.",
+      "Resume the session and run `/compact`, which removes outdated tool results from the conversation."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "a large refactor has moved most of the files, so earlier tool results no longer describe the code",
+    "rationale": "Start a new session and inject a structured summary of still-valid conclusions. Resume plus `/compact` cannot make outdated tool results describe the new code.",
+    "domain": "1. Agentic Architecture & Orchestration",
+    "scenario": "Code Generation with Claude Code"
+  },
+  {
+    "q": "A long investigation is approaching context limits, and it must also survive a crash of the coordinating process. Which TWO techniques are appropriate?",
+    "o": [
+      "Run `/compact` to reduce context usage once verbose discovery output has filled the session.",
+      "Have each agent export structured state to a known location, with a manifest the coordinator loads on resume.",
+      "Delete the older tool results from the conversation history manually after each major phase has finished.",
+      "Rely on the coordinator restarting and re-exploring the codebase, because exploration is fast enough to repeat.",
+      "Increase `max_tokens` on the coordinator, which raises the amount of history it is able to retain in context."
+    ],
+    "a": [
+      0,
+      1
+    ],
+    "lock": "it must also survive a crash of the coordinating process",
+    "rationale": "Use `/compact` for context limits, and export structured state with a manifest so work can resume after a crash. Re-exploring from scratch after a restart does not preserve state.",
+    "domain": "5. Context Management & Reliability",
+    "scenario": "Code Generation with Claude Code"
+  },
+  {
+    "q": "`submit_to_ledger` rejects an invoice because the supplier is on a compliance hold. The agent currently waits and retries with backoff until the job times out. Which TWO changes are correct?",
+    "o": [
+      "Return a business error category with a not-retryable flag and a readable explanation of the hold.",
+      "Have the agent respond by taking an alternative path, such as sending the invoice to the exception queue.",
+      "Return a transient error so the agent's existing backoff loop keeps trying until the hold has been lifted.",
+      "Return success with no ledger entry so that the batch job can complete without reporting any exceptions.",
+      "Increase the backoff intervals so that the retries put less load on the ledger during the compliance hold."
+    ],
+    "a": [
+      0,
+      1
+    ],
+    "lock": "the supplier is on a compliance hold, and the agent currently retries with backoff until the job times out",
+    "rationale": "Return a not-retryable business error and take an alternative path, such as an exception queue. Increasing backoff still retries a hold that will not lift by waiting.",
+    "domain": "2. Tool Design & MCP Integration",
+    "scenario": "Structured Data Extraction"
+  },
+  {
+    "q": "A subagent's `read_vault` tool returned `isError` true for a document because it exceeded the vault's rate limit. What information makes this error most useful to the agent?",
+    "o": [
+      "A transient category, a retryable flag set to true, and a description of what occurred.",
+      "A permission category and a retryable flag set to false, so that no further calls are made.",
+      "A generic message of `Operation failed`, with the complete stack trace for debugging purposes.",
+      "A successful response with an empty document, marked with an internal warning in the logs."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "`isError` is true because the call exceeded the vault's rate limit",
+    "rationale": "Return a transient category, `retryable` set to true, and a description of what occurred. A successful empty document hides a retryable failure.",
+    "domain": "2. Tool Design & MCP Integration",
+    "scenario": "Structured Data Extraction"
+  },
+  {
+    "q": "The extraction team wants a shared Jira integration so that low-confidence documents become review tickets. A maintained community Jira MCP server covers this. What is the best choice?",
+    "o": [
+      "Use the community server, and reserve custom servers for workflows specific to the team.",
+      "Build a custom server, because a team should always own all of the code that its agents call.",
+      "Have the agent construct raw HTTP calls to Jira through Bash, in order to avoid an MCP dependency.",
+      "Disable the built-in tools so that the agent is compelled to use the Jira integration consistently."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "a maintained community Jira MCP server covers this",
+    "rationale": "Use the community server and reserve custom servers for team-specific workflows. Do not build raw HTTP calls through Bash just to avoid MCP.",
+    "domain": "2. Tool Design & MCP Integration",
+    "scenario": "Structured Data Extraction"
+  },
+  {
+    "q": "A dashboard shows 98% accuracy, but handwritten delivery notes are often wrong and are only 3% of volume. Which TWO actions should you take?",
+    "o": [
+      "Report accuracy broken down by document type and field, instead of relying on the aggregate figure.",
+      "Keep human review for handwritten delivery notes until their segment-level accuracy meets the target.",
+      "Remove the review queue, because 98% overall accuracy exceeds what the business has asked for.",
+      "Exclude handwritten notes from the dashboard so that the reported accuracy is more representative.",
+      "Accept self-reported confidence on handwritten notes, because the model knows when it is uncertain."
+    ],
+    "a": [
+      0,
+      1
+    ],
+    "lock": "98% accuracy, but handwritten delivery notes are often wrong",
+    "rationale": "Break accuracy down by document type and keep human review for the weak segment. Do not exclude handwritten notes from the dashboard.",
+    "domain": "5. Context Management & Reliability",
+    "scenario": "Structured Data Extraction"
+  },
+  {
+    "q": "When extraction finds an unresolved conflict, the case goes to an exception reviewer who cannot see the agent's conversation or tool history. Which THREE items belong in the handoff?",
+    "o": [
+      "The document identifier and the specific field that could not be resolved.",
+      "The conflicting values, together with where each value appears in the source.",
+      "The agent's recommended action or the decision needed from the reviewer.",
+      "The complete raw transcript of the agent's turns, so that nothing is summarized.",
+      "A paragraph apologizing to the reviewer for the additional manual workload.",
+      "A sentiment rating of the supplier's tone as it appears in the source document."
+    ],
+    "a": [
+      0,
+      1,
+      2
+    ],
+    "lock": "the exception reviewer cannot see the agent's conversation or tool history",
+    "rationale": "Include the document identifier and field, the conflicting values and where they appear, and the recommended action. Sentiment is not usable handoff, and the reviewer cannot see the transcript.",
+    "domain": "1. Agentic Architecture & Orchestration",
+    "scenario": "Structured Data Extraction"
+  },
+  {
+    "q": "Before running a batch of 200,000 contracts, you are unsure if the prompt handles all formats. What is the most cost-effective step?",
+    "o": [
+      "Refine the prompt on a representative sample first, to improve first-pass success before the full batch.",
+      "Submit the full batch at once, because the batch discount makes any resubmission inexpensive overall.",
+      "Run the full set synchronously first so that errors surface sooner, then compare it to the batch output.",
+      "Split the batch into two equal halves and use a different untested prompt on each of them to compare."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "a batch of 200,000 contracts, and you are unsure if the prompt handles all formats",
+    "rationale": "Refine the prompt on a representative sample first. Do not split the batch and run two untested prompts.",
+    "domain": "4. Prompt Engineering & Structured Output",
+    "scenario": "Structured Data Extraction"
+  },
+  {
+    "q": "A contract's `renewal_price` is defined only as `see Schedule B`, and Schedule B is not part of the file. Validation requires a number. What is the correct handling?",
+    "o": [
+      "Return null or route to human review, since a retry cannot supply information absent from the source.",
+      "Retry with an instruction to search the contract more carefully until the renewal price has been found.",
+      "Estimate the price from the initial contract price, and mark the value as approximate for later review.",
+      "Fill in zero so that the record passes validation and continues on to the downstream finance systems."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "`renewal_price` is `see Schedule B`, and Schedule B is not part of the file",
+    "rationale": "Return null or route to human review. A retry cannot supply information that is not in the source.",
+    "domain": "4. Prompt Engineering & Structured Output",
+    "scenario": "Structured Data Extraction"
+  },
+  {
+    "q": "Before publication, each report must be approved by a fact-check step, and this must be guaranteed. The coordinator's prompt already says to run the fact-check, but one report in 30 skips it. What should you do?",
+    "o": [
+      "Add a programmatic gate that blocks the publish tool until the fact-check step has recorded its completion.",
+      "Move the fact-check instruction to the first line of the coordinator prompt and mark it as mandatory.",
+      "Add three few-shot examples of the coordinator running the fact-check step before publishing a report.",
+      "Ask the publish tool's description to remind the coordinator that the fact-check must happen first."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "the fact-check must be guaranteed, but one report in 30 still skips it",
+    "rationale": "Add a programmatic gate that blocks publish until fact-check records completion. Few-shot examples do not guarantee the step.",
+    "domain": "1. Agentic Architecture & Orchestration",
+    "scenario": "Multi-Agent Research System"
+  },
+  {
+    "q": "The synthesis subagent has full web search access and sometimes launches long searches instead of writing. It occasionally does need to confirm one date or figure. What is the best tool design?",
+    "o": [
+      "Remove web search from synthesis and give it a narrow `verify_fact` tool, routing complex cases through the coordinator.",
+      "Keep full web search but add a sentence to the subagent's prompt asking it to search only when truly necessary.",
+      "Remove every tool from synthesis, and require it to mark anything uncertain so a human can check it after publication.",
+      "Keep full web search but set `tool_choice` to `auto`, so that the subagent decides when searching is worthwhile."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "synthesis sometimes launches long searches instead of writing, but it occasionally needs to confirm one date or figure",
+    "rationale": "Remove full web search and give it a narrow `verify_fact` tool, routing complex cases through the coordinator. `tool_choice: auto` still leaves full search in place.",
+    "domain": "2. Tool Design & MCP Integration",
+    "scenario": "Multi-Agent Research System"
+  },
+  {
+    "q": "A coordinator handles both `who founded this journal?` and `compare global carbon pricing schemes`. Which TWO coordinator behaviors are appropriate?",
+    "o": [
+      "Select only the subagents each query needs, so that the simple question skips most of the pipeline.",
+      "Break the broad comparison into distinct subtopics so that important regions and mechanisms are covered.",
+      "Always run all four subagents, because a consistent pipeline makes the system easier for the team to debug.",
+      "Let the subagents negotiate among themselves which of them should take each part of the broad comparison.",
+      "Use the same narrow decomposition for both queries, because a fixed granularity makes costs predictable."
+    ],
+    "a": [
+      0,
+      1
+    ],
+    "lock": "the coordinator handles both `who founded this journal?` and `compare global carbon pricing schemes`",
+    "rationale": "Select only the subagents the simple query needs, and break the broad comparison into subtopics. Do not let subagents negotiate among themselves.",
+    "domain": "1. Agentic Architecture & Orchestration",
+    "scenario": "Multi-Agent Research System"
+  },
+  {
+    "q": "The synthesis subagent writes unsupported claims even though the search subagent found good sources. Logs show the coordinator told it only `Summarize what the search agent found.` What is the most likely cause?",
+    "o": [
+      "Subagents do not inherit context, so the coordinator must include the actual findings in the synthesis prompt.",
+      "The synthesis subagent needs web search access so that it can look up the sources that it has been told about.",
+      "The search subagent ran on a smaller model, which caused its findings to be written in a low-quality format.",
+      "The coordinator needs to run the synthesis subagent twice so that the second run can correct the first draft."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "the coordinator told synthesis only `Summarize what the search agent found.`",
+    "rationale": "Subagents do not inherit context, so the coordinator must include the actual findings in the synthesis prompt. Giving synthesis web search does not fix the missing context.",
+    "domain": "1. Agentic Architecture & Orchestration",
+    "scenario": "Multi-Agent Research System"
+  },
+  {
+    "q": "The coordinator receives long subagent outputs in sequence, and its final plan repeatedly omits findings from the middle of the aggregated input. What restructuring best mitigates this?",
+    "o": [
+      "Place a key findings summary at the beginning, and organize the detailed results under explicit section headers.",
+      "Add an instruction asking the coordinator to read the aggregated input closely and to give every part equal weight.",
+      "Reverse the order of the subagent outputs so that a different set of findings appears at the end of the input.",
+      "Merge the outputs into one continuous block of prose so the model reads them as a single unified document."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "the final plan repeatedly omits findings from the middle of the aggregated input",
+    "rationale": "Place a key findings summary at the beginning and organize details under section headers. Reversing order only moves which findings get lost.",
+    "domain": "5. Context Management & Reliability",
+    "scenario": "Multi-Agent Research System"
+  },
+  {
+    "q": "The web search subagent fails on one topic because of a timeout, and another topic returns no matching documents. Which TWO statements about reporting these outcomes are correct?",
+    "o": [
+      "The timeout is an access failure and should include the query attempted, partial results, and possible alternatives.",
+      "The no-match outcome is a valid empty result and should not be reported to the coordinator as a failure.",
+      "Both should be reported as `search unavailable` so that the coordinator can apply a single recovery policy.",
+      "Both should be reported as empty lists so that the synthesis subagent is not distracted by operational details.",
+      "Either outcome should end the workflow, because a report with a gap cannot be considered to be trustworthy."
+    ],
+    "a": [
+      0,
+      1
+    ],
+    "lock": "one topic fails because of a timeout, and another topic returns no matching documents",
+    "rationale": "Report the timeout as an access failure with context. A no-match is a valid empty result, not a failure. Do not report both as `search unavailable`.",
+    "domain": "5. Context Management & Reliability",
+    "scenario": "Multi-Agent Research System"
+  },
+  {
+    "q": "Two credible studies give 34% and 41% for the same adoption rate, measured with different methods. The analysis subagent found both. What should happen?",
+    "o": [
+      "Keep both figures with their sources and method notes, annotated as a conflict for the coordinator to reconcile.",
+      "Report the mean of 37.5%, noting that the figure combines the two studies so readers get a single estimate.",
+      "Report the figure from the journal with the highest reputation, and place the other in a footnote without its method.",
+      "Retry the search until a third study is found that agrees with one of them, then report that as the true value."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "two credible studies give 34% and 41%, measured with different methods",
+    "rationale": "Keep both figures with sources and method notes, annotated as a conflict. Do not retry until a third study agrees and treat that as the true value.",
+    "domain": "5. Context Management & Reliability",
+    "scenario": "Multi-Agent Research System"
+  },
+  {
+    "q": "Your review prompt says `check that comments are accurate`, and developers dismiss most of the comment-related findings as nitpicks. Which instruction is better?",
+    "o": [
+      "Flag a comment only when the behavior it claims contradicts what the code actually does.",
+      "Report only those comment problems that you are highly confident developers will care about.",
+      "Be conservative about comments, and prefer leaving out any finding that seems to be minor.",
+      "Check comments for accuracy, clarity, grammar, and completeness, and rate each one out of ten."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "the prompt says `check that comments are accurate`, and developers dismiss the findings as nitpicks",
+    "rationale": "Flag a comment only when the claimed behavior contradicts what the code actually does. “Be conservative” remains vague and still produces nitpicks.",
+    "domain": "4. Prompt Engineering & Structured Output",
+    "scenario": "Claude Code for Continuous Integration"
+  },
+  {
+    "q": "Your CI MCP server has `get_coverage` and `get_coverage_diff`, both described as `Returns coverage information`. When asked whether a pull request reduced coverage, the agent often fetches whole-repository totals and draws the wrong conclusion. What is the best first fix?",
+    "o": [
+      "Describe what each tool returns, its inputs, and when to prefer it, explicitly distinguishing repository totals from pull request changes.",
+      "Add a routing step before the agent that classifies each coverage question and then calls one of the two tools directly.",
+      "Set `tool_choice` to force `get_coverage_diff` on every request, because pull request reviews are the main use of this agent.",
+      "Remove `get_coverage` from the server entirely, on the assumption that repository totals are not needed for reviewing pull requests."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "both tools are described as `Returns coverage information`, and this is the best first fix",
+    "rationale": "Describe what each tool returns, its inputs, and when to prefer it, distinguishing repository totals from pull-request changes. Forcing `tool_choice` is not the first fix.",
+    "domain": "2. Tool Design & MCP Integration",
+    "scenario": "Claude Code for Continuous Integration"
+  },
+  {
+    "q": "The CI agent runs shell commands through a tool. It must never execute `git push --force`, and the raw output of three linters, each in a different format, should reach the model in one consistent shape. Which TWO mechanisms should you use?",
+    "o": [
+      "A hook that intercepts outgoing tool calls and blocks any force-push command before it can run.",
+      "A `PostToolUse` hook that normalizes each linter's output before the model processes the result.",
+      "A `PostToolUse` hook that detects force pushes and reports them to the repository's maintainers.",
+      "A `CLAUDE.md` rule that forbids force pushes, written at the very top of the configuration file.",
+      "A system prompt section that explains the output format of each linter and how to interpret it."
+    ],
+    "a": [
+      0,
+      1
+    ],
+    "lock": "it must never execute `git push --force`, and three linters' raw output must reach the model in one consistent shape",
+    "rationale": "Use a hook that blocks force-push before the command runs, and a `PostToolUse` hook to normalize linter output. A system prompt cannot guarantee `never`.",
+    "domain": "1. Agentic Architecture & Orchestration",
+    "scenario": "Claude Code for Continuous Integration"
+  },
+  {
+    "q": "You are designing a review architecture for AI-generated code. Which TWO choices are supported by sound practice?",
+    "o": [
+      "Use an independent review instance that does not have the generator's reasoning context.",
+      "Run a verification pass that reports confidence with each finding, to help route findings for review.",
+      "Ask the generating session to review its own changes, since it best understands its reasoning.",
+      "Rely on extended thinking in the generating session in place of a separate review instance.",
+      "Merge the review and generation prompts into one request so that defects are fixed before output."
+    ],
+    "a": [
+      0,
+      1
+    ],
+    "lock": "a review architecture for AI-generated code",
+    "rationale": "Use an independent review instance without the generator's reasoning context, plus a verification pass that reports confidence. Do not ask the generating session to review itself.",
+    "domain": "4. Prompt Engineering & Structured Output",
+    "scenario": "Claude Code for Continuous Integration"
+  },
+  {
+    "q": "Your review job always performs the same three steps: per-file correctness, per-file security, then a cross-file data-flow pass. A teammate proposes replacing this with a planner that decides for each pull request what to examine. The release team requires comparable results from run to run. What should you do?",
+    "o": [
+      "Keep the prompt chain, because the aspects are predictable and each step's result can be compared between runs.",
+      "Adopt the planner, because letting the model choose steps always improves the depth of an automated code review.",
+      "Adopt the planner but cap it at three steps, which keeps the result comparable with the current fixed sequence.",
+      "Merge the three steps into a single prompt, since one combined pass is the most repeatable way to review code."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "the job always performs the same three steps, and the release team requires comparable results from run to run",
+    "rationale": "Keep the prompt chain so each step can be compared across runs. A planner that chooses different steps breaks comparability.",
+    "domain": "1. Agentic Architecture & Orchestration",
+    "scenario": "Claude Code for Continuous Integration"
+  },
+  {
+    "q": "A team plans to use the Message Batches API for an agent that reads files with tools during its analysis. Why will this design not work as described?",
+    "o": [
+      "A batch request cannot execute tools mid-request and return results for multi-turn tool calling.",
+      "Batch requests do not allow any system prompt, so the agent would lose its project instructions.",
+      "Batch requests are limited to documents under one page, which is too small for most source files.",
+      "Batch requests do not support JSON schemas, so the agent's tool definitions would simply be ignored."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "the Message Batches API for an agent that reads files with tools during its analysis",
+    "rationale": "A batch request cannot execute tools mid-request for multi-turn tool calling. It is not true that batch requests forbid any system prompt.",
+    "domain": "4. Prompt Engineering & Structured Output",
+    "scenario": "Claude Code for Continuous Integration"
+  },
+  {
+    "q": "You added a `search_code_index` MCP tool that returns semantic matches with ownership data, but during reviews the agent keeps using the built-in Grep. The MCP tool's description says only `Searches code`. What should you change?",
+    "o": [
+      "Expand the MCP tool's description to explain its capabilities and outputs, so the agent can see when it beats Grep.",
+      "Remove Grep from the agent, which guarantees that all searches now pass through the semantic index you have built.",
+      "Add `search_code_index` to the personal `~/.claude.json` of each engineer so that it has priority over built-in tools.",
+      "List the MCP server first in `.mcp.json`, because the first configured server takes priority during tool selection."
+    ],
+    "a": [
+      0
+    ],
+    "lock": "the MCP tool's description says only `Searches code`, so the agent keeps using Grep",
+    "rationale": "Expand the description to explain capabilities and outputs so the agent can see when it beats Grep. Adding the tool to each engineer's `~/.claude.json` does not fix a weak description.",
+    "domain": "2. Tool Design & MCP Integration",
+    "scenario": "Claude Code for Continuous Integration"
+  }
+];
+let drillOpen = false;
+let D = loadDrill() || freshDrill();
+function freshDrill() {
+  return { phase: "start", perm: [], answers: {}, revealed: {}, cur: 0, startedAt: 0, endedAt: 0 };
+}
+function loadDrill() {
+  try { const v = JSON.parse(localStorage.getItem(DRILL_KEY)); return v && v.phase ? v : null; } catch (e) { return null; }
+}
+function saveDrill() { try { localStorage.setItem(DRILL_KEY, JSON.stringify(D)); } catch (e) {} }
+function drillStatus() {
+  if (D.phase === "exam") return { cls: "", text: "In progress" };
+  if (D.phase === "result") return { cls: "", text: `${drillGrade().correct}/${DRILL_ITEMS.length}` };
+  return { cls: "", text: "Not started" };
+}
+function drillGrade() {
+  const items = DRILL_ITEMS.map((q, i) => {
+    const sel = D.answers[i] || [];
+    const want = [...q.a].sort((x, y) => x - y);
+    const got = [...sel].sort((x, y) => x - y);
+    const ok = want.length === got.length && want.every((v, j) => v === got[j]);
+    return { ok, blank: sel.length === 0 };
+  });
+  return { correct: items.filter(x => x.ok).length, total: items.length, items };
+}
+function beginDrill() {
+  D = freshDrill();
+  D.phase = "exam";
+  D.perm = DRILL_ITEMS.map(q => shuffled(q.o.length, Math.random));
+  D.startedAt = Date.now();
+  saveDrill();
+  drillOpen = true;
+  render();
+  window.scrollTo(0, 0);
+}
+function drillGo(i) {
+  D.cur = Math.max(0, Math.min(DRILL_ITEMS.length - 1, i));
+  saveDrill();
+  render();
+  window.scrollTo(0, 0);
+}
+function drillToggle(optIdx) {
+  if (D.revealed[D.cur]) return;
+  const q = DRILL_ITEMS[D.cur], want = q.a.length;
+  let sel = [...(D.answers[D.cur] || [])];
+  if (want === 1) sel = [optIdx];
+  else if (sel.includes(optIdx)) sel = sel.filter(x => x !== optIdx);
+  else if (sel.length < want) sel.push(optIdx);
+  D.answers[D.cur] = sel;
+  saveDrill();
+  render(`do${optIdx}`);
+}
+function drillCheck() {
+  if (!(D.answers[D.cur] || []).length) return;
+  D.revealed[D.cur] = true;
+  saveDrill();
+  render();
+}
+function finishDrill() {
+  D.phase = "result";
+  D.endedAt = Date.now();
+  DRILL_ITEMS.forEach((_, i) => { D.revealed[i] = true; });
+  saveDrill();
+  render();
+  window.scrollTo(0, 0);
+}
+function openDrill() {
+  drillOpen = true;
+  try { location.replace("#drill"); } catch (e) { location.hash = "drill"; }
+  render();
+  window.scrollTo(0, 0);
+}
+function closeDrill() {
+  drillOpen = false;
+  try { location.replace("#"); } catch (e) { location.hash = ""; }
+  render();
+  window.scrollTo(0, 0);
+}
+function drillStartView() {
+  const inProgress = D.phase === "exam";
+  const st = drillStatus();
+  const multi = DRILL_ITEMS.filter(q => q.a.length > 1).length;
+  return `<div class="hero"><div class="wrap">
+      <div class="eyebrow">CCAR-F practice · English</div>
+      <h1>Lock-clause drill</h1>
+      <p class="lead">Read the lock clause first, then choose the option it points to. Questions, options, and explanations are in English. These 31 items are taken from missed questions on mock exam 3.</p>
+      <ul class="herofacts"><li><b>${DRILL_ITEMS.length}</b>questions</li><li><b>${DRILL_ITEMS.length - multi}</b>single choice</li><li><b>${multi}</b>multiple choice</li></ul>
+      <div class="actions">
+        ${inProgress
+          ? `<button class="btn primary" id="drillresume">Resume practice</button>
+             <button class="btn" id="drillbegin">Start over</button>`
+          : D.phase === "result"
+            ? `<button class="btn primary" id="drillresults">View results</button><button class="btn" id="drillbegin">Practice again</button>`
+            : `<button class="btn primary" id="drillbegin">Start practice</button>`}
+        <button class="btn" id="drillhome">Back to exam list</button>
+      </div>
+    </div></div>
+    <main class="wrap start">
+      <section>
+        <h2>How to use this tab</h2>
+        <p class="sub" style="margin:0;color:var(--muted);max-width:72ch">The lock clause is the constraint that rules out an answer that otherwise sounds right. It is often the clause just before the ask, or a word such as must, never, guaranteed, currently, but, or cannot. For multiple-choice items, every correct option is required.</p>
+      </section>
+    </main>`;
+}
+function drillExamView() {
+  const q = DRILL_ITEMS[D.cur], sel = D.answers[D.cur] || [], want = q.a.length, multi = want > 1, shown = D.revealed[D.cur];
+  const G = drillGrade();
+  const checked = G.items.filter((x, i) => D.revealed[i]).length;
+  const full = multi && sel.length >= want;
+  const opts = (D.perm[D.cur] || q.o.map((_, i) => i)).map((orig, shownIdx) => {
+    const on = sel.includes(orig), off = !shown && full && !on;
+    const isRight = q.a.includes(orig);
+    const cls = [
+      "opt",
+      multi ? "multi" : "",
+      on ? "sel" : "",
+      off ? "off" : "",
+      shown && isRight ? "is" : "",
+      shown && on && !isRight ? "wrongpick" : ""
+    ].filter(Boolean).join(" ");
+    return `<label class="${cls}" for="do${orig}">
+      <input type="${multi ? "checkbox" : "radio"}" name="dans" id="do${orig}" data-dopt="${orig}" ${on ? "checked" : ""} ${off || shown ? "disabled" : ""}>
+      <span class="ltr">${LETTERS[shownIdx]}</span><span>${fmt(q.o[orig])}</span>
+      ${shown && isRight ? `<span class="rightnote">Correct answer</span>` : ""}
+      ${shown && on && !isRight ? `<span class="elimnote">Not correct</span>` : ""}
+    </label>`;
+  }).join("");
+  const instr = multi ? `Select ${COUNT[want]}.` : "Select ONE.";
+  const cells = DRILL_ITEMS.map((item, i) => {
+    const rec = G.items[i];
+    const mark = D.revealed[i] ? (rec.ok ? "ok" : "no") : (rec.blank ? "" : "done");
+    return `<button class="cell ${mark} ${i === D.cur ? "cur" : ""}" data-dgo="${i}" aria-label="Question ${i + 1}">${i + 1}</button>`;
+  }).join("");
+  const okNow = shown && G.items[D.cur].ok;
+  return `<div class="bar"><div class="wrap">
+      <span class="code">Lock-clause drill</span>
+      <span class="prog">${D.cur + 1} / ${DRILL_ITEMS.length} · checked ${checked}</span>
+      <span class="spacer"></span>
+      <button class="btn maptoggle" id="drillmap">Question list</button>
+      <button class="btn" id="drillfinish">Finish</button>
+      <button class="btn" id="drillhome">Exam list</button>
+    </div></div>
+    <div class="pbar"><span style="width:${((D.cur + 1) / DRILL_ITEMS.length) * 100}%"></span></div>
+    <main class="wrap exam">
+      <div>
+        <div class="scen"><b>${esc(q.scenario)}</b>${esc(q.domain)}</div>
+        <div class="sheet">
+          <div class="qhead"><span class="eyebrow">Question ${D.cur + 1} of ${DRILL_ITEMS.length}${multi ? " · Multiple choice" : ""}</span></div>
+          <div class="lockbox"><b>Lock clause</b><p>${fmt(q.lock)}</p></div>
+          <p class="stem">${fmt(q.q)}</p>
+          <p class="instr">${instr}</p>
+          <div class="opts">${opts}</div>
+          ${shown ? `<div class="exp lockexp">${fmt(q.rationale)}</div><p class="hintnote">${okNow ? "Correct" : "Incorrect"}</p>` : ""}
+          <div class="navrow">
+            <button class="btn" id="drillprev" ${D.cur === 0 ? "disabled" : ""}>Previous</button>
+            ${!shown && sel.length ? `<button class="btn ghost" id="drillclear">Clear</button>` : ""}
+            <span class="spacer"></span>
+            ${shown
+              ? `<button class="btn primary" id="drillnext" ${D.cur === DRILL_ITEMS.length - 1 ? "disabled" : ""}>Next</button>`
+              : `<button class="btn primary" id="drillcheck" ${sel.length ? "" : "disabled"}>Check answer</button>`}
+          </div>
+        </div>
+      </div>
+      <aside class="map ${mapOpen ? "open" : ""}" aria-label="Question list"><h2>Questions</h2>
+        <div class="cells">${cells}</div>
+        <div class="legend"><span><i class="a"></i>Answered</span><span><i class="ok"></i>Correct</span><span><i class="no"></i>Incorrect</span></div>
+      </aside>
+    </main>`;
+}
+function drillResultView() {
+  const G = drillGrade();
+  const pct = Math.round(100 * G.correct / G.total);
+  const reviews = DRILL_ITEMS.map((q, i) => {
+    const rec = G.items[i];
+    const sel = D.answers[i] || [];
+    const perm = D.perm[i] || q.o.map((_, k) => k);
+    const rows = perm.map((orig, shownIdx) => {
+      const on = sel.includes(orig), isRight = q.a.includes(orig);
+      const cls = isRight ? "is" : on ? "wrongpick" : "";
+      const why = isRight ? "Correct" : on ? "Your pick" : "";
+      return `<div class="${cls}"><span class="ltr">${LETTERS[shownIdx]}</span><span>${fmt(q.o[orig])}</span>${why ? `<span class="why">${why}</span>` : ""}</div>`;
+    }).join("");
+    return `<article class="rev" data-ok="${rec.ok ? "1" : "0"}">
+      <div class="top"><span>Question ${i + 1}</span><span class="mark ${rec.ok ? "ok" : rec.blank ? "blank" : "no"}">${rec.ok ? "Correct" : rec.blank ? "Blank" : "Incorrect"}</span></div>
+      <div class="lockbox"><b>Lock clause</b><p>${fmt(q.lock)}</p></div>
+      <p class="stem">${fmt(q.q)}</p>
+      <div class="ro">${rows}</div>
+      <div class="exp lockexp">${fmt(q.rationale)}</div>
+    </article>`;
+  }).join("");
+  return `<div class="hero"><div class="wrap">
+      <div class="eyebrow">Lock-clause drill · Results</div>
+      <div class="verdict">
+        <div class="score">${G.correct}<small>/${G.total}</small></div>
+        <div><span class="tag ${G.correct === G.total ? "pass" : "fail"}">${pct}%</span>
+          <p class="facts">${G.correct} correct · ${G.total - G.correct} missed</p></div>
+      </div>
+      <div class="actions">
+        <button class="btn primary" id="drillbegin">Practice again</button>
+        <button class="btn" id="drillhome">Back to exam list</button>
+      </div>
+    </div></div>
+    <main class="wrap result">
+      <section>
+        <h2>Review</h2>
+        <div class="reviews">${reviews}</div>
+      </section>
+    </main>`;
+}
+
+
 function startView() {
   const inProgress = S.phase === "exam";
   const dcount = {}; QUESTIONS.forEach(q => dcount[q.d] = (dcount[q.d] || 0) + 1);
@@ -3520,6 +4265,7 @@ function startView() {
     </div></div>
     <main class="wrap start">
     <section><h2>Chọn đề</h2><div class="setgrid">${SETS.map(x => { const st = setStatus(x.id); return `<button class="setcard" data-set="${x.id}" aria-pressed="${x.id === setId}"><b>Đề ${x.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${scenOrder(x.Q).map(k => SCEN_SHORT[k]).join(" · ")}</span></button>`; }).join("")}</div></section>
+    <section><h2>Practice</h2><div class="setgrid"><button class="setcard" id="opendrill" aria-pressed="false"><b>Lock-clause drill</b><span class="setstat ${drillStatus().cls}">${drillStatus().text}</span><span class="setscen">31 questions and answers in English</span></button></div></section>
     ${syncView()}
     <div class="cols">
       <section><h2>Cấu trúc bài thi</h2>
@@ -3844,6 +4590,11 @@ async function exportFile(kind) {
 
 function render(focusId) {
   clearInterval(timerId);
+  if (drillOpen) {
+    app.innerHTML = D.phase === "result" ? drillResultView() : D.phase === "exam" ? drillExamView() : drillStartView();
+    if (focusId) document.getElementById(focusId)?.focus();
+    return;
+  }
   if (S.phase === "exam" && Date.now() >= S.deadline) { finish(); return; }
   const onExam = S.phase === "exam" && !app.dataset.home;
   app.innerHTML = app.dataset.home || S.phase === "start" ? startView() : S.phase === "result" ? resultView() : examView();
@@ -3861,10 +4612,21 @@ function tick() {
 
 app.addEventListener("click", e => {
   const t = e.target.closest("button"); if (!t) return;
+  if (t.dataset.dgo !== undefined) return drillGo(+t.dataset.dgo);
   if (t.dataset.go !== undefined) return go(+t.dataset.go);
   if (t.dataset.f) { reviewFilter = t.dataset.f; return render(); }
   if (t.dataset.set) return selectSet(+t.dataset.set);
   switch (t.id) {
+    case "opendrill": return openDrill();
+    case "drillhome": return closeDrill();
+    case "drillbegin": return beginDrill();
+    case "drillresume": case "drillresults": D.phase = D.phase === "start" ? "exam" : D.phase; saveDrill(); render(); window.scrollTo(0, 0); return;
+    case "drillprev": return drillGo(D.cur - 1);
+    case "drillnext": return drillGo(D.cur + 1);
+    case "drillclear": D.answers[D.cur] = []; saveDrill(); return render();
+    case "drillcheck": return drillCheck();
+    case "drillfinish": return finishDrill();
+    case "drillmap": mapOpen = !mapOpen; return render();
     case "begin": delete app.dataset.home; return begin();
     case "resume": case "viewresult": delete app.dataset.home; render(); window.scrollTo(0, 0); return;
     case "home": case "home2": app.dataset.home = "1"; render(); window.scrollTo(0, 0); return;
@@ -3892,6 +4654,7 @@ app.addEventListener("click", e => {
   }
 });
 app.addEventListener("change", e => {
+  if (e.target.dataset.dopt !== undefined) return drillToggle(+e.target.dataset.dopt);
   if (e.target.dataset.opt !== undefined) return toggle(+e.target.dataset.opt);
   if (e.target.id === "dom") { reviewDomain = e.target.value; render(); }
   if (e.target.id === "syncfile" && e.target.files[0]) { e.target.files[0].text().then(importCode, () => importCode("")); }
@@ -3899,6 +4662,7 @@ app.addEventListener("change", e => {
 document.addEventListener("keydown", e => { if (e.key === "Escape" && modal) { modal = false; render(); } });
 
 if (S.phase !== "start") app.dataset.home = "1";
+if (location.hash === "#drill") drillOpen = true;
 render();
 if (location.hash.startsWith("#sync=")) {
   const code = location.hash.slice(6);
