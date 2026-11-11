@@ -253,12 +253,12 @@ details.sheetx[open] > summary { margin-bottom: 8px; }
 .diffnote { margin: 8px 0 0; color: var(--muted); font-size: 16px; }
 .flashwrap .filters { position: sticky; top: 0; z-index: 2; background: var(--bg); padding: 8px 0 12px; }
 .diffblock.diffhl { outline: 2px solid var(--accent); outline-offset: 6px; border-radius: 8px; background: var(--accent-soft); padding: 12px 14px; }
-.rev .stem.hasdiff { cursor: pointer; }
-.rev .stem.hasdiff:hover { color: var(--accent); }
+.rev .stem.hasdiff a { color: inherit; text-decoration: none; cursor: pointer; }
+.rev .stem.hasdiff a:hover { color: var(--accent); }
 .difflinks { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 0; }
 .difflinks .lbl { color: var(--muted); font-size: 16px; font-weight: 600; }
-button.diffjump { border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 4px 12px; font: 600 16px var(--sans); cursor: pointer; }
-button.diffjump:hover { background: var(--accent); color: var(--accent-ink); }
+a.diffjump { border: 1px solid var(--accent); background: var(--accent-soft); color: var(--accent); border-radius: 999px; padding: 4px 12px; font: 600 16px var(--sans); cursor: pointer; text-decoration: none; display: inline-block; }
+a.diffjump:hover { background: var(--accent); color: var(--accent-ink); }
 
 @media (max-width: 860px) {
   .difftable th:last-child, .difftable td:last-child { width: auto; }
@@ -3674,6 +3674,13 @@ function flashStatus() {
 function flashTitle(id) {
   return (FLASH_TABLES.find(t => t.id === id) || {}).title || id;
 }
+function flashHref(ids, focusId) {
+  const list = (ids || []).filter(id => FLASH_TABLES.some(t => t.id === id));
+  const ordered = focusId && list.includes(focusId) ? [focusId].concat(list.filter(id => id !== focusId)) : list;
+  const u = new URL(location.href);
+  u.hash = ordered.length ? "#flash/" + ordered.join(",") : "#flash";
+  return u.href;
+}
 function flashTable(t, n) {
   const rows = t.rows.map(([q, a]) => `<tr><td>${fmt(q)}</td><td>${fmt(a)}</td></tr>`).join("");
   const note = t.note ? `<p class="diffnote">${fmt(t.note)}</p>` : "";
@@ -3857,11 +3864,10 @@ function resultView() {
     }).join("");
     const mark = x.ok ? `<span class="mark ok">Đúng</span>` : x.blank ? `<span class="mark blank">Bỏ trống</span>` : `<span class="mark no">Sai</span>`;
     const diffs = tablesFor(q);
-    const diffLinks = diffs.length ? `<p class="difflinks"><span class="lbl">Bảng phân biệt:</span>${diffs.map(id => `<button type="button" class="diffjump" data-openflash="${id}">${esc(flashTitle(id))}</button>`).join("")}</p>` : "";
-    const stemCls = diffs.length ? "stem hasdiff" : "stem";
-    const stemAttr = diffs.length ? ` data-openflash-all="${diffs.join(",")}"` : "";
+    const diffLinks = diffs.length ? `<p class="difflinks"><span class="lbl">Bảng phân biệt:</span>${diffs.map(id => `<a class="diffjump" href="${esc(flashHref(diffs, id))}" target="_blank" rel="noopener">${esc(flashTitle(id))}</a>`).join("")}</p>` : "";
+    const stem = diffs.length ? `<p class="stem hasdiff"><a href="${esc(flashHref(diffs))}" target="_blank" rel="noopener">${fmt(q.q)}</a></p>` : `<p class="stem">${fmt(q.q)}</p>`;
     return `<article class="rev"><div class="top">${mark}<b>Câu ${x.index + 1}</b><span>Task ${q.t}</span><span>${esc(SCENARIOS[q.s].name)}</span>${q.a.length > 1 ? `<span>Select ${COUNT[q.a.length]}</span>` : ""}</div>
-      <p class="${stemCls}"${stemAttr}>${fmt(q.q)}</p>${diffLinks}<div class="ro">${ro}</div><p class="exp">${fmt(q.e)}</p></article>`;
+      ${stem}${diffLinks}<div class="ro">${ro}</div><p class="exp">${fmt(q.e)}</p></article>`;
   }).join("");
   return `<div class="hero"><div class="wrap">
       <div class="eyebrow">Kết quả · Đề ${setId} · Thi thử CCAR-F</div>
@@ -4077,13 +4083,6 @@ function tick() {
 }
 
 app.addEventListener("click", e => {
-  const jumpOne = e.target.closest("[data-openflash]");
-  if (jumpOne) {
-    const all = jumpOne.closest(".rev")?.querySelector("[data-openflash-all]")?.dataset.openflashAll;
-    return openFlashFromResult((all || jumpOne.dataset.openflash).split(",").filter(Boolean), jumpOne.dataset.openflash);
-  }
-  const jumpAll = e.target.closest("[data-openflash-all]");
-  if (jumpAll) return openFlashFromResult(jumpAll.dataset.openflashAll.split(",").filter(Boolean));
   const t = e.target.closest("button"); if (!t) return;
   if (t.dataset.go !== undefined) return go(+t.dataset.go);
   if (t.dataset.diff !== undefined) {
@@ -4132,10 +4131,14 @@ document.addEventListener("keydown", e => {
 
 if (S.phase !== "start") app.dataset.home = "1";
 (function bootFlashHash() {
-  const m = location.hash.match(/^#(?:flashcards|drill|flash(?:\/([\w-]+))?)$/);
+  const m = location.hash.match(/^#(?:flashcards|drill|flash(?:\/([\w,+-]+))?)$/);
   if (!m || !canOpenFlash()) return;
   flashOpen = true;
-  if (m[1] && FLASH_TABLES.some(t => t.id === m[1])) { flashFocus = m[1]; flashHighlight = [m[1]]; }
+  flashFromResult = S.phase === "result" && !app.dataset.home;
+  if (m[1]) {
+    const ids = m[1].split(/[,+]/).filter(id => FLASH_TABLES.some(t => t.id === id));
+    if (ids.length) { flashFocus = ids[0]; flashHighlight = ids; }
+  }
 })();
 render();
 if (flashOpen) scrollFlash();
