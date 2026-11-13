@@ -4781,11 +4781,20 @@ function cExpandSpan(src, a, b) {
   while (b < src.length && /[^\p{L}\p{N}\s]/u.test(src[b])) b++;
   return [a, b];
 }
-/* Precompute a short cue for every COURSE_Q correct answer, unique across ALL
-   option texts in the course (~800, counted by distinct wording). Prefer a
-   short OPENING (1–3 words, e.g. "Ask one") when that opening is not the start
-   of any other option; otherwise a short unique ENDING. If neither is unique
-   within 3 words, extend whichever side becomes unique with fewer words. */
+/* Precompute a memorable 4–6-word cue for every COURSE_Q correct answer,
+   unique across ALL option texts in the course (~800, by distinct wording).
+   If a short OPENING is globally unique, use a meaningful opening phrase
+   (verb + object, e.g. "Ask one clarifying question", "Use direct execution
+   to examine"); otherwise a meaningful ENDING (e.g. "identify the root cause").
+   When both 4–8-word phrases are unique, prefer the more distinctive one
+   (more content words, not a mid-phrase cut). Minimum 4 words unless the
+   option itself is shorter; extend up to 8 for uniqueness or a phrase boundary. */
+const C_CUE_END_BAD = new Set("a an the to of and or for with at by from as about into where so than then but if".split(" "));
+function cCueContent(norm) { return !C_STOP.has(norm); }
+function cCuePunctAfter(src, tk, i) {
+  if (i >= tk.length - 1) return true;
+  return /[,.;:!?—–]/.test(src.slice(tk[i].end, tk[i + 1].start));
+}
 function cBuildCues(questions) {
   const uniq = [];
   const seen = new Set();
@@ -4823,23 +4832,68 @@ function cBuildCues(questions) {
     }
     return Infinity;
   }
-  const SHORT = 3;
+  function uniqHead(tk, k) { return k <= tk.length && (headCounts[k].get(cOptKey(tk, 0, k)) || 0) === 1; }
+  function uniqTail(tk, k) { return k <= tk.length && (tailCounts[k].get(cOptKey(tk, tk.length - k, tk.length)) || 0) === 1; }
+  function headTake(tk, src, uH) {
+    const maxT = Math.min(8, tk.length), minT = Math.min(4, tk.length);
+    let k = Math.min(Math.max(minT, isFinite(uH) ? uH : minT), maxT);
+    while (k < maxT && !uniqHead(tk, k)) k++;
+    while (k < maxT && !cCueContent(tk[k - 1].norm)) k++;
+    if (k + 1 <= maxT && tk[k] && tk[k].norm === "to" && tk[k + 1] && cCueContent(tk[k + 1].norm) && !cCuePunctAfter(src, tk, k - 1)) k += 2;
+    while (k < 6 && k < maxT && tk[k] && cCueContent(tk[k].norm) && !cCuePunctAfter(src, tk, k - 1)) {
+      if (cCueContent(tk[k - 1].norm) && tk[k - 1].norm.length >= 4 && k >= 4) break;
+      k++;
+      while (k < maxT && !cCueContent(tk[k - 1].norm)) k++;
+    }
+    while (k < maxT && !uniqHead(tk, k)) k++;
+    while (k > minT && C_CUE_END_BAD.has(tk[k - 1].norm) && uniqHead(tk, k - 1)) k--;
+    return k;
+  }
+  function tailTake(tk, src, uT) {
+    const maxT = Math.min(8, tk.length), minT = Math.min(4, tk.length);
+    let k = Math.min(Math.max(minT, isFinite(uT) ? uT : minT), maxT);
+    while (k < maxT && !uniqTail(tk, k)) k++;
+    const first = () => tk[tk.length - k];
+    while (k < maxT && first() && (!cCueContent(first().norm) || /^(and|or|but|then|nor|also)$/.test(first().norm))) k++;
+    while (k < maxT && !uniqTail(tk, k)) k++;
+    return k;
+  }
+  function cueScore(tk, start, end) {
+    const slice = tk.slice(start, end);
+    let content = 0, longw = 0;
+    slice.forEach(tok => {
+      if (cCueContent(tok.norm)) {
+        content++;
+        if (tok.norm.length >= 5) longw++;
+      }
+    });
+    let s = content * 3 + longw * 2 - (slice.length - content) * 2 + Math.min(slice.length, 6) * 0.3;
+    if (C_CUE_END_BAD.has(tk[end - 1].norm)) s -= 12;
+    if (start > 0 && (C_CUE_END_BAD.has(tk[start].norm) || /^(and|or|but|then)$/.test(tk[start].norm))) s -= 6;
+    return s;
+  }
   const cues = new Map();
   questions.forEach(q => {
     const src = String(q.o[q.a]);
     const tk = cWords(src);
     const h = uHead(tk), tlen = uTail(tk);
-    let kind, take;
-    if (h <= SHORT) { kind = "đầu"; take = h; }
-    else if (tlen <= SHORT) { kind = "đuôi"; take = tlen; }
-    else if (h <= tlen) { kind = "đầu"; take = h; }
-    else { kind = "đuôi"; take = tlen; }
-    if (!tk.length || !isFinite(take) || take < 1) {
-      take = Math.min(2, tk.length) || 0;
-      kind = "đầu";
-    }
+    const ht = tk.length ? headTake(tk, src, h) : 0;
+    const tt = tk.length ? tailTake(tk, src, tlen) : 0;
+    const headOk = ht && uniqHead(tk, ht);
+    const tailOk = tt && uniqTail(tk, tt);
+    const headElig = headOk && (h <= 8);
+    let kind;
+    if (headElig && tailOk) {
+      const hs = cueScore(tk, 0, ht), ts = cueScore(tk, tk.length - tt, tk.length);
+      if (hs > ts + 0.8) kind = "đầu";
+      else if (ts > hs + 0.8) kind = "đuôi";
+      else kind = h <= 6 ? "đầu" : "đuôi";
+    } else if (headElig) kind = "đầu";
+    else if (tailOk) kind = "đuôi";
+    else kind = (ht && (!tt || ht <= tt)) ? "đầu" : "đuôi";
+    const take = kind === "đầu" ? ht : tt;
     let a = 0, b = 0;
-    if (take) {
+    if (take && tk.length) {
       if (kind === "đầu") [a, b] = cExpandSpan(src, tk[0].start, tk[take - 1].end);
       else [a, b] = cExpandSpan(src, tk[tk.length - take].start, tk[tk.length - 1].end);
     }
@@ -5017,7 +5071,7 @@ function courseHome() {
     </div></div>
     <main class="wrap start">
       <section><h2>Chọn chương</h2><div class="setgrid">${COURSE_CH.map(c => { const st = cSumStatus(c.lessons, cChapterNs(c.id).length); return `<button class="setcard" ${cAttr({ v: "ch", c: c.id })}><b>Chương ${c.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${esc(c.title)}</span></button>`; }).join("")}</div></section>
-      <div class="note"><b>Cách học.</b> Đọc quy tắc của chương, làm bài câu dễ rồi tới câu khó. Sau khi trả lời, chỉ tô đáp án đúng, càng ngắn càng tốt: nếu vài chữ đầu của đáp án đúng <b>không trùng với bất kỳ đáp án nào khác trong cả khóa</b> (khoảng 800 đáp án) thì nhớ phần đầu đó (dòng "Nhớ đầu:", ví dụ "Ask one"); nếu không thì nhớ đuôi ngắn riêng (dòng "Nhớ đuôi"). Phương án sai không được tô, không bôi vàng cụm đầu chung. Mỗi lần vào một bài, bài đó được làm lại từ đầu (đảo câu và đáp án); kết quả lần gần nhất của từng bài được lưu và đồng bộ cùng tiến độ 6 đề. Nút "Học tiếp" quay lại đúng chỗ đang làm dở.</div>
+      <div class="note"><b>Cách học.</b> Đọc quy tắc của chương, làm bài câu dễ rồi tới câu khó. Sau khi trả lời, chỉ tô đáp án đúng, một cụm <b>khoảng 4–6 chữ có nghĩa</b>: nếu phần đầu đáp án đúng <b>không trùng với bất kỳ đáp án nào khác trong cả khóa</b> (khoảng 800 đáp án) thì nhớ cụm đầu (dòng "Nhớ đầu:", ví dụ "Ask one clarifying question"); nếu không thì nhớ cụm đuôi (dòng "Nhớ đuôi:", ví dụ "identify the root cause"). Phương án sai không được tô, không bôi vàng cụm đầu chung. Mỗi lần vào một bài, bài đó được làm lại từ đầu (đảo câu và đáp án); kết quả lần gần nhất của từng bài được lưu và đồng bộ cùng tiến độ 6 đề. Nút "Học tiếp" quay lại đúng chỗ đang làm dở.</div>
     </main>`;
 }
 function courseChapter(id) {
