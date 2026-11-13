@@ -4388,10 +4388,6 @@ function startView() {
       Toàn bộ câu hỏi được soạn mới theo blueprint, không phải câu hỏi thi thật.
     </div>
     ${history().length ? `<section class="card"><h2>Lịch sử điểm</h2><div class="tblwrap"><table class="tbl hist"><tr><th>Ngày</th><th>Đề</th><th>Điểm</th><th>Đúng</th><th>Thời gian</th><th>Gợi ý loại</th></tr>${[...history()].reverse().slice(0, 12).map(h => `<tr><td>${new Date(h.at).toLocaleDateString("vi-VN")}</td><td>${h.set}</td><td>${h.scaled}</td><td>${h.correct}/60</td><td>${Math.round(h.ms / 60000)} phút</td><td>${h.hint ? "Có" : "Không"}</td></tr>`).join("")}</table></div></section>` : ""}
-    <section class="sheetx"><h2>Từ cần loại</h2>
-      <p class="sub">Đáp án sai thường có dấu hiệu lặp lại. Khi bật gợi ý, đáp án đúng được tô xanh và ghi "Đáp án đúng"; đáp án sai khớp một mẫu dưới đây được tô xám, viền nét đứt, kèm lý do loại. Mỗi mẫu đã được gắn tay cho từng đáp án sai, nên đáp án đúng không bao giờ bị tô. Tổng hợp từ <a href="https://knowt.com/flashcards/abea3075-c183-4001-a21d-3f4b8fb7120e">bộ flashcard Từ Cần Loại</a>.</p>
-      ${sheetBody()}
-    </section>
   </main>`;
 }
 
