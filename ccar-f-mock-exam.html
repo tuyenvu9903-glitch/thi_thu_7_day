@@ -4811,7 +4811,7 @@ function courseHome() {
     </div></div>
     <main class="wrap start">
       <section><h2>Chọn chương</h2><div class="setgrid">${COURSE_CH.map(c => { const st = cSumStatus(c.lessons, cChapterNs(c.id).length); return `<button class="setcard" ${cAttr({ v: "ch", c: c.id })}><b>Chương ${c.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${esc(c.title)}</span></button>`; }).join("")}</div></section>
-      <div class="note"><b>Cách học.</b> Đọc quy tắc của chương, làm bài câu dễ để nhớ từ khóa trong câu hỏi dẫn tới đáp án nào, rồi làm bài câu bẫy. Ở câu bẫy, từ khóa chỉ được bôi vàng sau khi bạn trả lời. Mỗi lần vào một bài, bài đó được làm lại từ đầu (đảo câu và đáp án); kết quả lần gần nhất của từng bài được lưu và đồng bộ cùng tiến độ 6 đề. Nút "Học tiếp" quay lại đúng chỗ đang làm dở.</div>
+      <div class="note"><b>Cách học.</b> Đọc quy tắc của chương, làm bài câu dễ để nhớ từ khóa trong câu hỏi dẫn tới đáp án nào, rồi làm bài câu bẫy. Ở câu bẫy, phần bôi vàng là chỗ cần chú ý để không chọn nhầm. Mỗi lần vào một bài, bài đó được làm lại từ đầu (đảo câu và đáp án); kết quả lần gần nhất của từng bài được lưu và đồng bộ cùng tiến độ 6 đề. Nút "Học tiếp" quay lại đúng chỗ đang làm dở.</div>
     </main>`;
 }
 function courseChapter(id) {
@@ -4847,7 +4847,7 @@ function cReview(q, mine) {
 }
 function courseQuestion(l, i) {
   const ord = cOrder[l.id], n = ord[i], q = CQ_BY[n], mine = CS.ans[n], done = mine != null;
-  const showKw = CS.hl && (q.cat === "E" || done);
+  const showKw = CS.hl;
   const d = cDone(ord);
   const opts = done ? cReview(q, mine) : `<div class="opts">${cPerm[n].map((orig, shown) => `<label class="opt" for="co${orig}"><input type="radio" name="cans" id="co${orig}" data-copt="${orig}"><span class="ltr">${LETTERS[shown]}</span><span>${fmt(q.o[orig])}</span></label>`).join("")}</div>`;
   const cells = ord.map((m, j) => { const a = CS.ans[m]; return `<button class="cell ${a == null ? "" : a === CQ_BY[m].a ? "cok" : "cno"} ${j === i ? "cur" : ""}" ${cAttr({ v: "q", l: l.id, i: j })} aria-label="Câu ${j + 1}">${j + 1}</button>`; }).join("");
@@ -4860,7 +4860,7 @@ function courseQuestion(l, i) {
     </div><div class="pbar" role="progressbar" aria-label="Tiến độ bài" aria-valuemin="0" aria-valuemax="${ord.length}" aria-valuenow="${d}"><span style="width:${d / ord.length * 100}%"></span></div></div>
     <main class="wrap exam">
       <div>
-        <div class="scen"><b>${cRound[l.id] ? `Vòng ôn câu sai ${cRound[l.id]} · ` : ""}${esc(l.name)} · Chương ${l.ch.id}: ${esc(l.ch.title)}</b>${l.cat === "E" ? "Câu dễ: đọc cụm từ khóa được bôi vàng trong câu hỏi là chọn được đáp án." : "Câu bẫy: các phương án sai nghe rất hợp lý. Từ khóa được bôi vàng sau khi trả lời."}</div>
+        <div class="scen"><b>${cRound[l.id] ? `Vòng ôn câu sai ${cRound[l.id]} · ` : ""}${esc(l.name)} · Chương ${l.ch.id}: ${esc(l.ch.title)}</b>${l.cat === "E" ? "Câu dễ: đọc cụm từ khóa được bôi vàng trong câu hỏi là chọn được đáp án." : "Câu bẫy: các phương án sai nghe rất hợp lý. Đọc kỹ phần bôi vàng, đó là chỗ phân biệt đáp án đúng."}</div>
         <section class="sheet">
           <div class="qhead"><span class="eyebrow">Câu ${i + 1} · câu gốc #${q.n}</span><span class="mark ${q.cat === "T" ? "blank" : "ok"}">${q.cat === "T" ? "Bẫy" : "Dễ"}</span></div>
           <p class="stem">${showKw ? cMark(q.q, q.sk) : fmt(q.q)}</p>
