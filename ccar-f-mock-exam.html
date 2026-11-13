@@ -4840,9 +4840,9 @@ function cReview(q, mine) {
   const ro = p.map((orig, shown) => {
     const is = orig === q.a, picked = orig === mine;
     const why = is && picked ? "Đúng · bạn chọn" : is ? "Đáp án đúng" : picked ? "Bạn chọn" : "";
-    return `<div class="${is ? "is" : picked ? "wrongpick" : ""}"><span class="ltr">${LETTERS[shown]}</span><span>${fmt(q.o[orig])}</span><span class="why">${why}<span class="corig">gốc ${C_LET[orig]}</span></span></div>`;
+    return `<div class="${is ? "is" : picked ? "wrongpick" : ""}"><span class="ltr">${LETTERS[shown]}</span><span>${fmt(q.o[orig])}</span><span class="why">${why}</span></div>`;
   }).join("");
-  return `<div class="ro">${ro}</div><p class="exp">${cNote(q)}</p><details class="cdet"><summary>Giải thích chi tiết (chữ cái theo thứ tự gốc, xem nhãn "gốc" ở mỗi đáp án)</summary><p>${fmt(q.ex)}</p></details>`;
+  return `<div class="ro">${ro}</div><p class="exp">${cNote(q)}</p><details class="cdet"><summary>Giải thích chi tiết</summary><p>${fmt(FINAL_E[q.n] || q.ex)}</p></details>`;
 }
 function courseQuestion(l, i) {
   const ord = cOrder[l.id], n = ord[i], q = CQ_BY[n], mine = CS.ans[n], done = mine != null;
