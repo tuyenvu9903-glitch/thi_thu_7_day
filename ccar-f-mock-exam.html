@@ -4727,11 +4727,12 @@ COURSE_CH.forEach(c => {
   });
 });
 const C_LB = Object.fromEntries(C_LESSONS.map(l => [l.id, l]));
-let courseOpen = false, cpos = { v: "home" }, cOrder = {}, cPerm = {}, cFilter = "all";
+let courseOpen = false, cpos = { v: "home" }, cOrder = {}, cPerm = {}, cRound = {}, cFilter = "all";
 function cLoad() { const v = parseJson((() => { try { return localStorage.getItem(C_KEY); } catch (e) { return null; } })()); if (v && typeof v.ans === "object") { v.res = v.res || {}; return v; } return { ans: {}, res: {}, hl: true, last: null }; }
 let CS = cLoad();
 function cSave() { try { localStorage.setItem(C_KEY, JSON.stringify(CS)); } catch (e) {} }
 function cShuffle() {
+  cRound = {};
   C_LESSONS.forEach(l => { cOrder[l.id] = shuffled(l.ns.length, Math.random).map(i => l.ns[i]); });
   COURSE_Q.forEach(q => { cPerm[q.n] = shuffled(q.o.length, Math.random); });
 }
@@ -4785,7 +4786,7 @@ function cGo(pos) {
   if (pos.fresh && C_LB[pos.l]) {
     const l = C_LB[pos.l];
     l.ns.forEach(n => { delete CS.ans[n]; cPerm[n] = shuffled(CQ_BY[n].o.length, Math.random); });
-    cOrder[l.id] = shuffled(l.ns.length, Math.random).map(i => l.ns[i]);
+    cOrder[l.id] = shuffled(l.ns.length, Math.random).map(i => l.ns[i]); cRound[l.id] = 0;
     pos = { v: "q", l: l.id, i: 0 }; cSave();
   }
   cpos = pos; cFilter = "all"; mapOpen = false;
@@ -4859,7 +4860,7 @@ function courseQuestion(l, i) {
     </div><div class="pbar" role="progressbar" aria-label="Tiến độ bài" aria-valuemin="0" aria-valuemax="${ord.length}" aria-valuenow="${d}"><span style="width:${d / ord.length * 100}%"></span></div></div>
     <main class="wrap exam">
       <div>
-        <div class="scen"><b>${esc(l.name)} · Chương ${l.ch.id}: ${esc(l.ch.title)}</b>${l.cat === "E" ? "Câu dễ: đọc cụm từ khóa được bôi vàng trong câu hỏi là chọn được đáp án." : "Câu bẫy: các phương án sai nghe rất hợp lý. Từ khóa được bôi vàng sau khi trả lời."}</div>
+        <div class="scen"><b>${cRound[l.id] ? `Vòng ôn câu sai ${cRound[l.id]} · ` : ""}${esc(l.name)} · Chương ${l.ch.id}: ${esc(l.ch.title)}</b>${l.cat === "E" ? "Câu dễ: đọc cụm từ khóa được bôi vàng trong câu hỏi là chọn được đáp án." : "Câu bẫy: các phương án sai nghe rất hợp lý. Từ khóa được bôi vàng sau khi trả lời."}</div>
         <section class="sheet">
           <div class="qhead"><span class="eyebrow">Câu ${i + 1} · câu gốc #${q.n}</span><span class="mark ${q.cat === "T" ? "blank" : "ok"}">${q.cat === "T" ? "Bẫy" : "Dễ"}</span></div>
           <p class="stem">${showKw ? cMark(q.q, q.sk) : fmt(q.q)}</p>
@@ -4878,25 +4879,32 @@ function courseQuestion(l, i) {
     </main>`;
 }
 function courseSummary(l) {
-  const ord = cOrder[l.id], d = cDone(ord), r = cRight(ord), wrong = ord.filter(n => CS.ans[n] != null && CS.ans[n] !== CQ_BY[n].a);
-  const pct = Math.round(r / ord.length * 100), passed = d === ord.length && pct >= 70;
+  const ord = cOrder[l.id], round = cRound[l.id] || 0;
+  const d = cDone(ord), r = cRight(ord), wrongRound = ord.filter(n => CS.ans[n] != null && CS.ans[n] !== CQ_BY[n].a);
+  const left = ord.findIndex(n => CS.ans[n] == null);
+  const wrongAll = l.ns.filter(n => CS.ans[n] !== CQ_BY[n].a), mastered = !wrongAll.length;
+  const known = l.ns.length - wrongAll.length, first = (CS.res || {})[l.id];
   const idx = C_LESSONS.indexOf(l), nx = C_LESSONS[idx + 1];
-  const shown = ord.filter(n => cFilter === "all" ? CS.ans[n] != null : cFilter === "wrong" ? wrong.includes(n) : CS.ans[n] === CQ_BY[n].a);
+  const shown = ord.filter(n => cFilter === "all" ? CS.ans[n] != null : cFilter === "wrong" ? wrongRound.includes(n) : CS.ans[n] === CQ_BY[n].a);
   const cards = shown.map(n => { const q = CQ_BY[n], ok = CS.ans[n] === q.a; return `<article class="rev"><div class="top"><span class="mark ${ok ? "ok" : "no"}">${ok ? "Đúng" : "Sai"}</span><b>Câu ${ord.indexOf(n) + 1}</b><span>Câu gốc #${n}</span><span>${q.cat === "T" ? "Bẫy" : "Dễ"}</span></div><p class="stem">${CS.hl ? cMark(q.q, q.sk) : fmt(q.q)}</p>${cReview(q, CS.ans[n])}</article>`; }).join("");
   const nextBtn = nx ? (nx.ch !== l.ch ? `<button class="btn primary" ${cAttr({ v: "ch", c: nx.ch.id })}>Sang Chương ${nx.ch.id}</button>` : `<button class="btn primary" ${cAttr({ v: "q", l: nx.id, i: 0, fresh: 1 })}>Bài tiếp: ${esc(nx.name)}</button>`) : `<button class="btn primary" ${cAttr({ v: "home" })}>Hoàn thành khóa ôn</button>`;
+  const main = left >= 0 ? `<button class="btn primary" ${cAttr({ v: "q", l: l.id, i: left })}>Làm tiếp (còn ${ord.length - d} câu)</button>`
+    : !mastered ? `<button class="btn primary" id="cloop">Ôn lại ${wrongAll.length} câu sai (vòng ${round + 1})</button>`
+    : nextBtn;
+  const tag = left >= 0 ? ["", "CHƯA XONG"] : mastered ? ["pass", "ĐÃ THUỘC HẾT"] : ["fail", `CÒN ${wrongAll.length} CÂU SAI`];
   return `<div class="hero"><div class="wrap">
-      <div class="eyebrow">Kết quả bài · Chương ${l.ch.id} · ${esc(l.ch.title)}</div>
+      <div class="eyebrow">Kết quả ${round ? `vòng ôn câu sai ${round}` : "bài"} · Chương ${l.ch.id} · ${esc(l.ch.title)}</div>
       <div class="verdict">
         <div class="score">${r}<small> /${ord.length}</small></div>
-        <div><span class="tag ${passed ? "pass" : "fail"}">${d < ord.length ? "CHƯA XONG" : passed ? "ĐẠT" : "CẦN ÔN LẠI"}</span>
-          <p class="facts">${esc(l.name)} · đã làm ${d}/${ord.length} · sai ${wrong.length} · đúng ${pct}%</p>
-          <p class="facts">Mốc đạt của bài: đúng từ 70% trở lên.</p></div>
+        <div><span class="tag ${tag[0]}">${tag[1]}</span>
+          <p class="facts">${esc(l.name)} · ${round ? `vòng ${round}: ` : ""}đã làm ${d}/${ord.length} · sai ${wrongRound.length} · đã thuộc ${known}/${l.ns.length} câu của bài</p>
+          <p class="facts">${mastered ? "Bạn đã trả lời đúng mọi câu của bài, có thể sang bài tiếp." : "Phải ôn lại đến khi đúng hết các câu sai mới được sang bài tiếp."}${first ? ` Lần làm đầu: đúng ${first.r}/${first.n}.` : ""}</p></div>
       </div>
-      <div class="actions">${nextBtn}${wrong.length || d < ord.length ? `<button class="btn" id="cretry">Làm lại câu sai và câu chưa làm</button>` : ""}<button class="btn" ${cAttr({ v: "ch", c: l.ch.id })}>Về chương</button></div>
+      <div class="actions">${main}<button class="btn" ${cAttr({ v: "ch", c: l.ch.id })}>Về chương</button></div>
     </div></div>
     <main class="wrap result">
       <section><h2>Xem lại và giải thích</h2>
-        <div class="filters">${[["all", "Tất cả", d], ["wrong", "Sai", wrong.length], ["right", "Đúng", r]].map(([k, t, c]) => `<button class="chip" data-cf="${k}" aria-pressed="${cFilter === k}">${t} (${c})</button>`).join("")}</div>
+        <div class="filters">${[["all", "Tất cả", d], ["wrong", "Sai", wrongRound.length], ["right", "Đúng", r]].map(([k, t, c]) => `<button class="chip" data-cf="${k}" aria-pressed="${cFilter === k}">${t} (${c})</button>`).join("")}</div>
         <div class="reviews">${cards || `<p class="empty">Không có câu nào khớp bộ lọc này.</p>`}</div>
       </section>
     </main>`;
@@ -4912,15 +4920,16 @@ function cAnswer(orig) {
   const n = cOrder[l.id][cpos.i];
   if (CS.ans[n] != null) return;
   CS.ans[n] = orig;
-  if (cDone(l.ns) === l.ns.length) { CS.res = CS.res || {}; CS.res[l.id] = { r: cRight(l.ns), n: l.ns.length, at: Date.now() }; }
+  if (!cRound[l.id] && cDone(l.ns) === l.ns.length) { CS.res = CS.res || {}; CS.res[l.id] = { r: cRight(l.ns), n: l.ns.length, at: Date.now() }; }
   cSave(); render();
 }
-function cRetry() {
+function cLoop() {
   const l = C_LB[cpos.l]; if (!l) return;
   const redo = l.ns.filter(n => CS.ans[n] !== CQ_BY[n].a);
+  if (!redo.length) return;
   redo.forEach(n => { delete CS.ans[n]; cPerm[n] = shuffled(CQ_BY[n].o.length, Math.random); });
-  const keep = cOrder[l.id].filter(n => !redo.includes(n));
-  cOrder[l.id] = shuffled(redo.length, Math.random).map(i => redo[i]).concat(keep);
+  cOrder[l.id] = shuffled(redo.length, Math.random).map(i => redo[i]);
+  cRound[l.id] = (cRound[l.id] || 0) + 1;
   cSave(); cGo({ v: "q", l: l.id, i: 0 });
 }
 function courseClick(t) {
@@ -4931,7 +4940,7 @@ function courseClick(t) {
     case "coursehome": closeCourse(); return true;
     case "cshuffle": cShuffle(); render(); return true;
     case "chl": CS.hl = !CS.hl; cSave(); render("chl"); return true;
-    case "cretry": cRetry(); return true;
+    case "cloop": cLoop(); return true;
     case "maptoggle": if (courseOpen) { mapOpen = !mapOpen; render(); return true; } return false;
   }
   return false;
