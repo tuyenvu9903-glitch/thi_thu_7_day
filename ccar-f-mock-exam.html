@@ -285,6 +285,9 @@ mark.kw { background: #ffe566; color: inherit; padding: 0 .12em; border-radius: 
 .ckeys { margin: 0; font-size: 14px; color: var(--muted); }
 .sheet .ro { margin-top: 14px; }
 .sheet .exp { margin-top: 12px; }
+.clabel { margin-left: 8px; font-size: 16px; color: var(--ink); }
+.scen .crules { font-size: 15.5px; gap: 4px; margin-top: 6px; }
+.scen .crules b, .scen .crules i { display: inline; margin: 0; font: inherit; font-weight: 700; }
 </style>
 
 <div id="app"></div>
@@ -4714,33 +4717,48 @@ async function exportFile(kind) {
 /* ===== Khóa ôn 230 câu: học theo chương, đồng bộ cùng tiến độ 6 đề (key "ccarf-course") ===== */
 const C_KEY = "ccarf-course", C_PART = 12, C_LET = "ABCD";
 const CQ_BY = Object.fromEntries(COURSE_Q.map(q => [q.n, q]));
+const C_GROUPS = [{"title": "Few-shot hay cách khác?", "rules": ["<b>Few-shot đúng<\/b> khi lỗi nằm ở cách diễn giải/định dạng không nhất quán, nguồn đa dạng, hoặc cần model tự tổng quát hoá phán đoán.", "<b>Few-shot là bẫy<\/b> khi: cần đảm bảo 100% → hook/code; thiếu chỗ chứa dữ liệu → sửa schema (enum \"other\", calculated_total); tool thiết kế sai → tách/gộp tool; agent không phân biệt được lỗi → lỗi có cấu trúc; trạng thái thay đổi → state object; chỉ cần dặn rõ là đủ → hướng dẫn trực tiếp."], "items": [[19, "Few-shot"], [16, "Sửa schema: calculated_total"], [21, "Few-shot"], [24, "Sửa schema: enum \"other\""], [27, "Few-shot"], [52, "Hook chặn tool call"], [80, "Few-shot"], [90, "Hướng dẫn trực tiếp trong prompt"], [122, "Few-shot"], [29, "Tách tool"], [154, "Few-shot"], [61, "Lỗi có cấu trúc"], [153, "State object có cấu trúc"], [124, "Tách prompt theo mối quan tâm"]], "ch": 5}, {"title": "Dặn trong prompt hay ép bằng code?", "rules": ["<b>Dặn trong prompt đúng<\/b> khi model chỉ cần biết rõ phải làm gì (trả null, liệt kê từng nhánh, nói rõ giả định) và sai sót lẻ tẻ chấp nhận được.", "<b>Ép bằng code đúng<\/b> khi đề nói <i>guaranteed / must never / tamper-proof / compliance / regardless<\/i>: hook, tool tự chặn, code tầng điều phối, cờ CLI. Lúc này mọi phương án \"nhấn mạnh trong prompt\" đều là bẫy."], "items": [[20, "Hướng dẫn trong prompt"], [52, "Hook chặn tool call"], [90, "Hướng dẫn trong prompt"], [99, "Hook PostToolUse chạy Prettier"], [97, "Hướng dẫn trong system prompt"], [141, "Tool tự chặn ngưỡng trong code"], [146, "Code tầng điều phối"], [214, "Cờ CLI --disallowedTools"], [216, "Hook PreToolUse sửa input"]], "ch": 1}, {"title": "Sửa description, tách hay gộp tool?", "rules": ["<b>Sửa description<\/b>: model không dùng tool, chọn nhầm giữa hai tool, hoặc bịa/điền sai tham số vì không biết lấy từ đâu.", "<b>Tách tool<\/b>: một tool gánh nhiều việc với bộ tham số/đầu ra khác nhau.", "<b>Gộp tool<\/b>: hai tool trùng nghĩa, hoặc hai bước phải atomic (race condition).", "<b>ID + tool tra cứu<\/b>: tham số dạng chữ tự do dễ sai giá trị."], "items": [[7, "Sửa description"], [29, "Tách tool"], [128, "Sửa description"], [94, "Tách tool"], [230, "Sửa description"], [137, "Tách tool"], [13, "Sửa description"], [111, "Gộp tool (atomic)"], [151, "Mô tả tham số rõ ràng"], [135, "Gộp tool trùng nghĩa"], [114, "ID + tool tra cứu"], [66, "Hai tool + token xác nhận"]], "ch": 3}, {"title": "Retry trong tool hay trả lỗi cho agent?", "rules": ["<b>Tool tự retry có backoff<\/b>: lỗi tạm thời (503, timeout) và đề hỏi cách xử lý trong tool.", "<b>Trả lỗi có cấu trúc<\/b> (loại lỗi, retryable, gợi ý): agent đang retry vô ích / không phân biệt được lỗi, cần cả câu trả lời tốt cho khách.", "<b>Gửi lại kèm lỗi validation<\/b>: đầu ra sai định dạng/ngữ nghĩa.", "<b>Retry vô ích<\/b>: thông tin không có trong input."], "items": [[93, "Tool tự retry có backoff"], [55, "Lỗi có cấu trúc (retryable)"], [110, "Tool retry lỗi tạm, trả lỗi vĩnh viễn"], [61, "Lỗi có cấu trúc"], [112, "Tool retry timeout, trả lỗi cú pháp"], [88, "Thông báo lỗi theo loại + gợi ý"], [67, "Gửi lại kèm lỗi validation"], [22, "Retry vô ích: thiếu thông tin"], [71, "Gửi lại kèm lỗi validation"], [48, "Làm phần làm được, báo lỗi"]], "ch": 3}, {"title": "Subagent, tóm tắt hay tự làm?", "rules": ["<b>Subagent<\/b>: việc lớn tách được thành câu hỏi con độc lập; coordinator giữ bức tranh chung.", "<b>Tóm tắt rồi giao subagent kèm tóm tắt<\/b>: context đã loãng nhưng cần giữ phát hiện cũ.", "<b>Ghi tóm tắt/scratchpad ra file<\/b>: phiên dài bắt đầu quên, việc vừa phải.", "<b>Tự làm<\/b>: coordinator đã có sẵn thông tin trong context, hoặc lần dò từng bước là đủ."], "items": [[58, "Subagent cho câu hỏi con"], [8, "Ghi tóm tắt ra file, context mới"], [5, "Tóm tắt rồi giao subagent"], [178, "Scratchpad file"], [39, "Coordinator spawn song song"], [37, "Coordinator tự làm"], [12, "Grep entry point rồi lần dần"]], "ch": 2}, {"title": "Resume, fork hay phiên mới?", "rules": ["<b>--resume &lt;tên&gt;<\/b>: biết tên phiên cần quay lại.", "<b>Resume + báo thay đổi<\/b>: context cũ còn giá trị, chỉ vài file đổi.", "<b>fork_session<\/b>: hai hướng song song từ cùng một phân tích.", "<b>Phiên mới + tóm tắt + gọi tool lại<\/b>: dữ liệu tool cũ đã cũ (khách quay lại sau vài giờ).", "<b>/compact<\/b>: giữ quyết định chính, giải phóng context."], "items": [[3, "--resume theo tên"], [9, "fork_session"], [4, "Resume + báo thay đổi"], [169, "Phiên mới + tóm tắt"], [177, "Resume + báo file đổi"], [10, "fork_session"], [56, "Phiên mới + tóm tắt"], [221, "/compact"]], "ch": 2}, {"title": "Tóm tắt, dữ liệu có cấu trúc hay cắt bớt?", "rules": ["<b>Tóm tắt dần + giữ nguyên văn phần gần<\/b>: hội thoại dài cần giữ mạch/kết luận.", "<b>Tách dữ liệu có cấu trúc<\/b>: dữ kiện phải chính xác tuyệt đối (dị ứng, số liệu, sở thích hiện tại, nhân vật).", "<b>Sliding window<\/b> chỉ đúng khi áp cho phần rác tích luỹ (kết quả RAG), không áp cho lịch sử hội thoại."], "items": [[72, "Tóm tắt dần"], [118, "Dữ liệu có cấu trúc + tóm tắt"], [75, "Hybrid: tóm tắt + nguyên văn"], [82, "Kho dữ kiện có cấu trúc"], [143, "Sliding window cho RAG"], [152, "Story bible tách riêng"], [53, "Tóm tắt dạng tường thuật"], [153, "State object có cấu trúc"]], "ch": 7}, {"title": "Thiếu thông tin: null, optional, mảng rỗng hay \"other\"?", "rules": ["Trường <b>đã nullable<\/b> mà model vẫn bịa → <b>hướng dẫn trả null<\/b>.", "Trường đang <b>required<\/b> khiến model bịa → chuyển <b>optional<\/b>.", "Trường kiểu <b>mảng<\/b> → \"không có\" = <b>mảng rỗng<\/b> (không phải null).", "Giá trị mới liên tục xuất hiện → enum + <b>\"other\"<\/b> + trường chi tiết.", "Nhiều giá trị cùng tồn tại (bản sửa đổi) → lưu nhiều giá trị kèm nguồn."], "items": [[20, "Hướng dẫn trả null"], [226, "Chuyển required → optional"], [145, "Mảng rỗng + \"unclear\""], [24, "Enum + \"other\""], [14, "Nhiều giá trị kèm nguồn"], [184, "Hướng dẫn trả null"], [194, "Mảng rỗng + \"unclear\""]], "ch": 5}, {"title": "Plan mode, làm ngay hay phỏng vấn?", "rules": ["<b>Direct execution<\/b>: lỗi đã rõ chỗ (stack trace), thay đổi nhỏ 1 file.", "<b>Plan mode<\/b>: thay đổi lớn, nhiều file, breaking changes.", "<b>Để Claude phỏng vấn<\/b>: chính bạn chưa rõ yêu cầu (nhiều ẩn số)."], "items": [[64, "Direct execution"], [83, "Plan mode"], [98, "Direct execution"], [100, "Phỏng vấn trước"], [199, "Direct execution"], [217, "Phỏng vấn trước"]], "ch": 1}, {"title": "Chuyển người ngay hay xử lý trước?", "rules": ["Khách đòi gặp người và <b>chưa có gì giải quyết được ngay<\/b> → chuyển ngay.", "Khách bực nhưng <b>vấn đề giải quyết được ngay<\/b> → ghi nhận, đề nghị xử lý hoặc chuyển.", "Vượt quyền hạn → <b>handoff có cấu trúc<\/b>.", "Tool lỗi giữa chừng → làm phần làm được, báo lỗi, đề nghị chuyển/thử lại."], "items": [[45, "Chuyển ngay"], [51, "Đề nghị xử lý hoặc chuyển"], [47, "Handoff có cấu trúc"], [48, "Làm phần làm được, báo lỗi"], [46, "3 trigger chuẩn"], [43, "Tóm tắt có cấu trúc"]], "ch": 6}, {"title": "Confidence, lấy mẫu hay phân tích theo nhóm?", "rules": ["<b>Confidence theo trường + hiệu chỉnh bằng tập có nhãn<\/b>: phân bổ người duyệt có hạn.", "<b>Phân tích theo loại tài liệu/trường<\/b>: trước khi tự động hoá dựa trên con số tổng.", "<b>Lấy mẫu ngẫu nhiên phân tầng<\/b>: đo tỷ lệ lỗi theo thời gian, bắt lỗi kiểu mới.", "<b>requires_review do tool tính<\/b>: tool đã có confidence, agent đang tự quyết sai."], "items": [[15, "Confidence + hiệu chỉnh"], [81, "Lấy mẫu phân tầng"], [25, "Phân tích theo nhóm"], [113, "requires_review + lý do"], [65, "Hai giai đoạn: tìm rộng rồi lọc"]], "ch": 5}, {"title": "Hướng dẫn Claude Code đặt ở đâu?", "rules": ["Việc làm một lần → <b>@file<\/b> trong prompt.", "Theo loại file, có quy ước đường dẫn → <b>.claude/rules/<\/b> với paths.", "Mỗi package tự chọn chuẩn → <b>@import<\/b> trong CLAUDE.md của package.", "Chuẩn chung cho cả team → <b>CLAUDE.md<\/b>; workflow gọi bằng /lệnh → <b>skill<\/b> trong project; cá nhân → <b>CLAUDE.local.md<\/b>.", "Code Review qua GitHub App → <b>REVIEW.md<\/b>. Lúc lúc theo lúc không → <b>/memory<\/b> kiểm tra trước."], "items": [[85, "@file trong prompt"], [134, ".claude/rules/ theo paths"], [86, "@import theo package"], [140, "CLAUDE.md"], [144, "Skill trong project"], [222, "CLAUDE.local.md"], [228, "REVIEW.md"], [116, "/memory để chẩn đoán"]], "ch": 1}, {"title": "Batch hay real-time?", "rules": ["Batch: rẻ 50% nhưng có thể mất tới 24h.", "Gấp → real-time; không gấp → batch; trộn cả hai → tách luồng.", "Hạn chót → cộng chu kỳ gửi + 24h phải còn dư.", "Lỗi một phần → chỉ gửi lại phần lỗi."], "items": [[28, "Tách luồng batch / real-time"], [26, "Batch mỗi 4 giờ"], [117, "Kết quả trễ 24h còn dùng được không"], [130, "Batch tất cả + gửi lại phần lỗi"], [225, "Message Batches API"], [18, "Chỉ gửi lại phần lỗi"]], "ch": 5}, {"title": "Hỏi lại hay tự giả định?", "rules": ["Các hành động <b>khác hẳn nhau<\/b>, người dùng mới → hỏi <b>một<\/b> câu.", "Hỏi nhiều làm người dùng bỏ đi → <b>giả định hợp lý, nói rõ<\/b>, mời chỉnh.", "Chỉ hỏi lại trước hành động <b>không đảo ngược được<\/b>."], "items": [[96, "Hỏi một câu"], [97, "Nói rõ giả định"], [79, "Nói rõ giả định, chỉ hỏi khi không đảo ngược"]], "ch": 7}, {"title": "Kế hoạch động hay quy trình cố định?", "rules": ["Không biết trước thành phần liên quan / truy vấn đa dạng, thay đổi → <b>quyết định động<\/b>.", "Quy trình <b>giống nhau mỗi lần<\/b> → prompt chaining cố định.", "Việc mở chưa ưu tiên → lập bản đồ, ưu tiên, <b>điều chỉnh dần<\/b>."], "items": [[1, "Kế hoạch thích ứng"], [125, "Prompt chaining cố định"], [40, "Coordinator quyết định động"], [105, "Lập bản đồ + ưu tiên + điều chỉnh"], [209, "Evaluator-optimizer"]], "ch": 2}, {"title": "tool_choice: auto, any hay ép tool?", "rules": ["Biết trước tool phải gọi đầu tiên → <b>{type:\"tool\", name}<\/b> ở lần đầu, sau đó auto.", "Phải gọi tool nhưng chưa biết tool nào → <b>\"any\"<\/b>.", "Ép tool ở mọi lượt → không làm được bước tiếp theo (bẫy)."], "items": [[17, "Ép tool cụ thể"], [70, "\"any\""], [91, "Ép tool lần đầu"], [211, "Ép lần đầu, sau đó auto"], [212, "Ép tool: không có text trước tool_use"]], "ch": 3}, {"title": "System prompt, user message hay prefill?", "rules": ["Hành vi lâu dài, thông tin hệ thống mới → <b>system prompt<\/b>.", "Hội thoại dài lệch quy tắc → chèn nhắc nhở bằng <b>user message<\/b>; quy tắc mô tả dài dòng → <b>few-shot<\/b>.", "Bỏ câu mở đầu lặp lại → <b>prefill<\/b>.", "Hỏi nguyên nhân lệch → phản hồi tích luỹ làm loãng system prompt."], "items": [[77, "Cập nhật system prompt"], [76, "Nhắc bằng user message"], [78, "Prefill"], [80, "Few-shot"], [157, "System prompt"], [74, "Nguyên nhân: phản hồi làm loãng"]], "ch": 7}, {"title": "Giữ nguồn trích dẫn & độ bất định: chọn cách nào?", "rules": ["Synthesis làm mất nguồn khi gộp → subagent xuất <b>cặp claim–nguồn có cấu trúc<\/b>.", "Metadata nguồn mất khi tóm tắt → output <b>tách nội dung và metadata nguồn<\/b>.", "Truyền cho report generator → <b>bản nháp + chỉ mục nguồn có cấu trúc<\/b>.", "Số liệu khác năm bị coi là mâu thuẫn → thêm <b>ngày<\/b> vào output.", "Báo cáo lúc chắc quá lúc mơ hồ → <b>tách phần đã xác nhận và phần còn tranh cãi<\/b> (không quy đổi xác suất)."], "items": [[36, "Cặp claim–nguồn có cấu trúc"], [166, "Thêm ngày vào output"], [41, "Tách nội dung và metadata nguồn"], [32, "Tách phần xác nhận / tranh cãi"], [38, "Bản nháp + chỉ mục nguồn"], [167, "Tách phần xác nhận / tranh cãi"]], "ch": 4}, {"title": "Coordinator nên làm gì?", "rules": ["Subagent không tự có context → coordinator <b>đưa kết quả vào prompt<\/b>.", "Subagent cứng nhắc → giao <b>mục tiêu + tiêu chí<\/b>, không giao thủ tục.", "Còn khoảng trống → agent báo khoảng trống, coordinator <b>giao lại có mục tiêu<\/b>.", "Đã có sẵn trong context → <b>tự trả lời<\/b>, không spawn.", "Việc độc lập → nhiều Task call <b>trong cùng một response<\/b>.", "Nói giao việc mà không chạy → thiếu <b>\"Task\"<\/b> trong allowedTools."], "items": [[35, "Đưa kết quả vào prompt"], [33, "Giao mục tiêu + tiêu chí"], [62, "Báo khoảng trống, giao lại"], [37, "Coordinator tự làm"], [102, "Nhiều Task call một response"], [30, "Thiếu \"Task\" trong allowedTools"]], "ch": 4}];
 const C_LESSONS = [];
+const C_INGROUP = new Set(C_GROUPS.flatMap(g => g.items.map(x => x[0])));
+function cAddParts(c, cat, name, ns, extra) {
+  if (!ns.length) return;
+  const parts = Math.ceil(ns.length / C_PART), size = Math.ceil(ns.length / parts);
+  for (let p = 0; p < parts; p++) {
+    const l = Object.assign({ id: `${c.id}${cat}${p}`, ch: c, cat, name: name + (parts > 1 ? ` · phần ${p + 1}` : ""), ns: ns.slice(p * size, (p + 1) * size) }, extra || {});
+    c.lessons.push(l); C_LESSONS.push(l);
+  }
+}
 COURSE_CH.forEach(c => {
   c.lessons = [];
-  [["E", "Câu dễ"], ["T", "Câu bẫy"]].forEach(([cat, name]) => {
-    const ns = COURSE_Q.filter(q => q.topic === c.id && q.cat === cat).map(q => q.n);
-    const parts = Math.ceil(ns.length / C_PART), size = Math.ceil(ns.length / parts);
-    for (let p = 0; p < parts; p++) {
-      const l = { id: `${c.id}${cat}${p}`, ch: c, cat, name: name + (parts > 1 ? ` · phần ${p + 1}` : ""), ns: ns.slice(p * size, (p + 1) * size) };
-      c.lessons.push(l); C_LESSONS.push(l);
-    }
+  cAddParts(c, "E", "Câu dễ", COURSE_Q.filter(q => q.topic === c.id && q.cat === "E").map(q => q.n));
+  C_GROUPS.forEach((g, k) => {
+    if (g.ch !== c.id) return;
+    const l = { id: `${c.id}P${k}`, ch: c, cat: "P", name: `Cặp bẫy: ${g.title}`, ns: g.items.map(x => x[0]), group: g, label: Object.fromEntries(g.items) };
+    c.lessons.push(l); C_LESSONS.push(l);
   });
+  cAddParts(c, "T", "Câu khó khác", COURSE_Q.filter(q => q.topic === c.id && q.cat === "T" && !C_INGROUP.has(q.n)).map(q => q.n));
 });
+function cMakeOrder(l) {
+  if (l.cat !== "P") return shuffled(l.ns.length, Math.random).map(i => l.ns[i]);
+  const pairs = []; for (let i = 0; i < l.ns.length; i += 2) pairs.push(l.ns.slice(i, i + 2));
+  return shuffled(pairs.length, Math.random).flatMap(k => Math.random() < .5 ? pairs[k] : [...pairs[k]].reverse());
+}
+const A = l => (CS.ans[l.id] = CS.ans[l.id] || {});
 const C_LB = Object.fromEntries(C_LESSONS.map(l => [l.id, l]));
 let courseOpen = false, cpos = { v: "home" }, cOrder = {}, cPerm = {}, cRound = {}, cFilter = "all";
-function cLoad() { const v = parseJson((() => { try { return localStorage.getItem(C_KEY); } catch (e) { return null; } })()); if (v && typeof v.ans === "object") { v.res = v.res || {}; return v; } return { ans: {}, res: {}, hl: true, last: null }; }
+function cLoad() { const v = parseJson((() => { try { return localStorage.getItem(C_KEY); } catch (e) { return null; } })()); if (v && typeof v.ans === "object" && v.v === 2) { v.res = v.res || {}; return v; } return { v: 2, ans: {}, res: {}, hl: !(v && v.hl === false), last: null }; }
 let CS = cLoad();
 function cSave() { try { localStorage.setItem(C_KEY, JSON.stringify(CS)); } catch (e) {} }
 function cShuffle() {
   cRound = {};
-  C_LESSONS.forEach(l => { cOrder[l.id] = shuffled(l.ns.length, Math.random).map(i => l.ns[i]); });
+  C_LESSONS.forEach(l => { cOrder[l.id] = cMakeOrder(l); });
   COURSE_Q.forEach(q => { cPerm[q.n] = shuffled(q.o.length, Math.random); });
 }
 cShuffle();
-const cDone = ns => ns.filter(n => CS.ans[n] != null).length;
-const cRight = ns => ns.filter(n => CS.ans[n] === CQ_BY[n].a).length;
-const cChapterNs = id => COURSE_Q.filter(q => q.topic === id).map(q => q.n);
-function cRes(l) { return (CS.res || {})[l.id] || (cDone(l.ns) === l.ns.length ? { r: cRight(l.ns), n: l.ns.length } : null); }
+const cDone = (ns, l) => ns.filter(n => A(l)[n] != null).length;
+const cRight = (ns, l) => ns.filter(n => A(l)[n] === CQ_BY[n].a).length;
+const cChapterNs = id => [...new Set((COURSE_CH.find(c => c.id === id) || { lessons: [] }).lessons.flatMap(l => l.ns))];
+function cRes(l) { return (CS.res || {})[l.id] || (cDone(l.ns, l) === l.ns.length ? { r: cRight(l.ns, l), n: l.ns.length } : null); }
 function cSum(lessons) {
   let k = 0, R = 0, N = 0;
   lessons.forEach(l => { const x = cRes(l); if (x) { k++; R += x.r; N += x.n; } });
@@ -4753,7 +4771,7 @@ function cSumStatus(lessons, total) {
 }
 function courseStatus() { return cSumStatus(C_LESSONS, 230); }
 function cLessonStatus(l) {
-  const d = cDone(l.ns), x = (CS.res || {})[l.id];
+  const d = cDone(l.ns, l), x = (CS.res || {})[l.id];
   if (d && d < l.ns.length) return { cls: "", text: `Đang học ${d}/${l.ns.length}` + (x ? ` · lần trước đúng ${x.r}/${x.n}` : "") };
   const y = cRes(l);
   if (y) return { cls: y.r / y.n >= .7 ? "pass" : "fail", text: `Lần gần nhất: đúng ${y.r}/${y.n}` };
@@ -4785,8 +4803,8 @@ function closeCourse() {
 function cGo(pos) {
   if (pos.fresh && C_LB[pos.l]) {
     const l = C_LB[pos.l];
-    l.ns.forEach(n => { delete CS.ans[n]; cPerm[n] = shuffled(CQ_BY[n].o.length, Math.random); });
-    cOrder[l.id] = shuffled(l.ns.length, Math.random).map(i => l.ns[i]); cRound[l.id] = 0;
+    l.ns.forEach(n => { delete A(l)[n]; cPerm[n] = shuffled(CQ_BY[n].o.length, Math.random); });
+    cOrder[l.id] = cMakeOrder(l); cRound[l.id] = 0;
     pos = { v: "q", l: l.id, i: 0 }; cSave();
   }
   cpos = pos; cFilter = "all"; mapOpen = false;
@@ -4800,8 +4818,8 @@ function courseHome() {
   return `<div class="hero"><div class="wrap">
       <div class="eyebrow">CCAR-F practice · Khóa ôn</div>
       <h1>Khóa ôn 230 câu</h1>
-      <p class="lead">230 câu luyện tập chia thành 7 chương theo chủ đề. Mỗi chương có <b>quy tắc cần nhớ</b>, bài <b>câu dễ</b> (từ khóa trong câu hỏi được bôi vàng, nhìn là ra đáp án) và bài <b>câu bẫy</b> (phương án sai nghe rất hợp lý). Thứ tự câu và đáp án được đảo mỗi lần mở.</p>
-      <ul class="herofacts"><li><b>230</b>câu</li><li><b>7</b>chương</li><li><b>${COURSE_Q.filter(q => q.cat === "E").length}</b>câu dễ</li><li><b>${COURSE_Q.filter(q => q.cat === "T").length}</b>câu bẫy</li><li><b>${cSum(C_LESSONS).k}/${C_LESSONS.length}</b>bài đã học</li></ul>
+      <p class="lead">230 câu luyện tập chia thành 7 chương theo chủ đề. Mỗi chương có <b>quy tắc cần nhớ</b>, bài <b>câu dễ</b> (từ khóa trong câu hỏi được bôi vàng, nhìn là ra đáp án) và các bài <b>cặp bẫy</b> (những câu nhìn giống nhau nhưng đáp án khác loại, ví dụ câu này đáp án là few-shot còn câu kia few-shot lại là bẫy) và bài <b>câu khó khác</b>. Thứ tự câu và đáp án được đảo mỗi lần mở.</p>
+      <ul class="herofacts"><li><b>230</b>câu</li><li><b>7</b>chương</li><li><b>${COURSE_Q.filter(q => q.cat === "E").length}</b>câu dễ</li><li><b>${C_GROUPS.length}</b>cặp bẫy</li><li><b>${cSum(C_LESSONS).k}/${C_LESSONS.length}</b>bài đã học</li></ul>
       <div class="actions">
         ${last ? `<button class="btn primary" ${cAttr({ v: "q", l: last.id, i: Math.min(CS.last.i, last.ns.length - 1) })}>Học tiếp: Chương ${last.ch.id} · ${esc(last.name)}</button>` : `<button class="btn primary" ${cAttr({ v: "ch", c: 1 })}>Bắt đầu Chương 1</button>`}
         <button class="btn" id="cshuffle">Đảo lại câu và đáp án</button>
@@ -4811,7 +4829,7 @@ function courseHome() {
     </div></div>
     <main class="wrap start">
       <section><h2>Chọn chương</h2><div class="setgrid">${COURSE_CH.map(c => { const st = cSumStatus(c.lessons, cChapterNs(c.id).length); return `<button class="setcard" ${cAttr({ v: "ch", c: c.id })}><b>Chương ${c.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${esc(c.title)}</span></button>`; }).join("")}</div></section>
-      <div class="note"><b>Cách học.</b> Đọc quy tắc của chương, làm bài câu dễ để nhớ từ khóa trong câu hỏi dẫn tới đáp án nào, rồi làm bài câu bẫy. Ở câu bẫy, phần bôi vàng là chỗ cần chú ý để không chọn nhầm. Mỗi lần vào một bài, bài đó được làm lại từ đầu (đảo câu và đáp án); kết quả lần gần nhất của từng bài được lưu và đồng bộ cùng tiến độ 6 đề. Nút "Học tiếp" quay lại đúng chỗ đang làm dở.</div>
+      <div class="note"><b>Cách học.</b> Đọc quy tắc của chương, làm bài câu dễ để nhớ từ khóa trong câu hỏi dẫn tới đáp án nào, rồi làm các bài cặp bẫy: các câu giống nhau được xếp cạnh nhau, đầu bài có quy tắc "khi nào chọn cái gì", sau khi trả lời sẽ thấy loại đáp án của từng câu. Phần bôi vàng là chỗ cần chú ý để không chọn nhầm. Mỗi lần vào một bài, bài đó được làm lại từ đầu (đảo câu và đáp án); kết quả lần gần nhất của từng bài được lưu và đồng bộ cùng tiến độ 6 đề. Nút "Học tiếp" quay lại đúng chỗ đang làm dở.</div>
     </main>`;
 }
 function courseChapter(id) {
@@ -4828,7 +4846,7 @@ function courseChapter(id) {
     </div></div>
     <main class="wrap start">
       <section class="card"><h2>Quy tắc cần nhớ</h2><ol class="crules">${c.rules.map(r => `<li>${r}</li>`).join("")}</ol></section>
-      <section><h2>Bài học</h2><div class="setgrid">${c.lessons.map(l => { const s = cLessonStatus(l); return `<button class="setcard" ${cAttr({ v: "q", l: l.id, i: 0, fresh: 1 })}><b>${esc(l.name)}</b><span class="setstat ${s.cls}">${s.text}</span><span class="setscen">${l.cat === "E" ? "Từ khóa trong câu hỏi → đáp án, nhìn là ra" : "Phương án sai nghe rất hợp lý, đọc kỹ"}</span></button>`; }).join("")}</div></section>
+      <section><h2>Bài học</h2><div class="setgrid">${c.lessons.map(l => { const s = cLessonStatus(l); return `<button class="setcard" ${cAttr({ v: "q", l: l.id, i: 0, fresh: 1 })}><b>${esc(l.name)}</b><span class="setstat ${s.cls}">${s.text}</span><span class="setscen">${l.cat === "E" ? "Từ khóa trong câu hỏi → đáp án, nhìn là ra" : l.cat === "P" ? "Câu giống nhau, đáp án khác loại — so sánh từng cặp" : "Câu khó không thuộc cặp nào"}</span></button>`; }).join("")}</div></section>
       <div class="actions">${prev ? `<button class="btn" ${cAttr({ v: "ch", c: prev.id })}>← Chương ${prev.id}</button>` : ""}${next ? `<button class="btn" ${cAttr({ v: "ch", c: next.id })}>Chương ${next.id} →</button>` : ""}</div>
     </main>`;
 }
@@ -4846,11 +4864,11 @@ function cReview(q, mine) {
   return `<div class="ro">${ro}</div><p class="exp">${cNote(q)}</p><details class="cdet"><summary>Giải thích chi tiết</summary><p>${fmt(FINAL_E[q.n] || q.ex)}</p></details>`;
 }
 function courseQuestion(l, i) {
-  const ord = cOrder[l.id], n = ord[i], q = CQ_BY[n], mine = CS.ans[n], done = mine != null;
+  const ord = cOrder[l.id], n = ord[i], q = CQ_BY[n], mine = A(l)[n], done = mine != null;
   const showKw = CS.hl;
-  const d = cDone(ord);
+  const d = cDone(ord, l);
   const opts = done ? cReview(q, mine) : `<div class="opts">${cPerm[n].map((orig, shown) => `<label class="opt" for="co${orig}"><input type="radio" name="cans" id="co${orig}" data-copt="${orig}"><span class="ltr">${LETTERS[shown]}</span><span>${fmt(q.o[orig])}</span></label>`).join("")}</div>`;
-  const cells = ord.map((m, j) => { const a = CS.ans[m]; return `<button class="cell ${a == null ? "" : a === CQ_BY[m].a ? "cok" : "cno"} ${j === i ? "cur" : ""}" ${cAttr({ v: "q", l: l.id, i: j })} aria-label="Câu ${j + 1}">${j + 1}</button>`; }).join("");
+  const cells = ord.map((m, j) => { const a = A(l)[m]; return `<button class="cell ${a == null ? "" : a === CQ_BY[m].a ? "cok" : "cno"} ${j === i ? "cur" : ""}" ${cAttr({ v: "q", l: l.id, i: j })} aria-label="Câu ${j + 1}">${j + 1}</button>`; }).join("");
   const last = i === ord.length - 1;
   return `<div class="bar"><div class="wrap">
       <span class="code">Khóa ôn · Chương ${l.ch.id}</span><span class="prog">Câu ${i + 1}/${ord.length} · đã làm ${d}</span><span class="spacer"></span>
@@ -4860,11 +4878,11 @@ function courseQuestion(l, i) {
     </div><div class="pbar" role="progressbar" aria-label="Tiến độ bài" aria-valuemin="0" aria-valuemax="${ord.length}" aria-valuenow="${d}"><span style="width:${d / ord.length * 100}%"></span></div></div>
     <main class="wrap exam">
       <div>
-        <div class="scen"><b>${cRound[l.id] ? `Vòng ôn câu sai ${cRound[l.id]} · ` : ""}${esc(l.name)} · Chương ${l.ch.id}: ${esc(l.ch.title)}</b>${l.cat === "E" ? "Câu dễ: đọc cụm từ khóa được bôi vàng trong câu hỏi là chọn được đáp án." : "Câu bẫy: các phương án sai nghe rất hợp lý. Đọc kỹ phần bôi vàng, đó là chỗ phân biệt đáp án đúng."}</div>
+        <div class="scen"><b>${cRound[l.id] ? `Vòng ôn câu sai ${cRound[l.id]} · ` : ""}${esc(l.name)} · Chương ${l.ch.id}: ${esc(l.ch.title)}</b>${l.cat === "P" ? `<ul class="crules">${l.group.rules.map(r => `<li>${r}</li>`).join("")}</ul>` : l.cat === "E" ? "Câu dễ: đọc cụm từ khóa được bôi vàng trong câu hỏi là chọn được đáp án." : "Câu bẫy: các phương án sai nghe rất hợp lý. Đọc kỹ phần bôi vàng, đó là chỗ phân biệt đáp án đúng."}</div>
         <section class="sheet">
-          <div class="qhead"><span class="eyebrow">Câu ${i + 1} · câu gốc #${q.n}</span><span class="mark ${q.cat === "T" ? "blank" : "ok"}">${q.cat === "T" ? "Bẫy" : "Dễ"}</span></div>
+          <div class="qhead"><span class="eyebrow">Câu ${i + 1} · câu gốc #${q.n}</span><span class="mark ${l.cat === "E" ? "ok" : "blank"}">${l.cat === "P" ? "Cặp bẫy" : l.cat === "E" ? "Dễ" : "Khó"}</span></div>
           <p class="stem">${showKw ? cMark(q.q, q.sk) : fmt(q.q)}</p>
-          ${done ? `<p class="instr"><span class="mark ${mine === q.a ? "ok" : "no"}">${mine === q.a ? "Đúng" : "Sai"}</span></p>` : `<p class="instr">Select ONE.</p>`}
+          ${done ? `<p class="instr"><span class="mark ${mine === q.a ? "ok" : "no"}">${mine === q.a ? "Đúng" : "Sai"}</span>${l.label ? ` <span class="clabel">Đáp án câu này: <b>${esc(l.label[n])}</b></span>` : ""}</p>` : `<p class="instr">Select ONE.</p>`}
           ${opts}
           <div class="navrow">
             <button class="btn" ${cAttr({ v: "q", l: l.id, i: i - 1 })} ${i === 0 ? "disabled" : ""}>Câu trước</button>
@@ -4874,19 +4892,19 @@ function courseQuestion(l, i) {
         </section>
       </div>
       <aside class="map ${mapOpen ? "open" : ""}" aria-label="Danh sách câu"><h2>Danh sách câu</h2><div><h3>${esc(l.name)}<span>${d}/${ord.length}</span></h3><div class="cells">${cells}</div></div>
-        <div class="legend"><span><i class="cok"></i>Đúng (${cRight(ord)})</span><span><i class="cno"></i>Sai (${d - cRight(ord)})</span></div>
+        <div class="legend"><span><i class="cok"></i>Đúng (${cRight(ord, l)})</span><span><i class="cno"></i>Sai (${d - cRight(ord, l)})</span></div>
         <p class="ckeys">Phím tắt: 1–4 hoặc A–D để chọn, ← → để chuyển câu.</p></aside>
     </main>`;
 }
 function courseSummary(l) {
   const ord = cOrder[l.id], round = cRound[l.id] || 0;
-  const d = cDone(ord), r = cRight(ord), wrongRound = ord.filter(n => CS.ans[n] != null && CS.ans[n] !== CQ_BY[n].a);
-  const left = ord.findIndex(n => CS.ans[n] == null);
-  const wrongAll = l.ns.filter(n => CS.ans[n] !== CQ_BY[n].a), mastered = !wrongAll.length;
+  const d = cDone(ord, l), r = cRight(ord, l), wrongRound = ord.filter(n => A(l)[n] != null && A(l)[n] !== CQ_BY[n].a);
+  const left = ord.findIndex(n => A(l)[n] == null);
+  const wrongAll = l.ns.filter(n => A(l)[n] !== CQ_BY[n].a), mastered = !wrongAll.length;
   const known = l.ns.length - wrongAll.length, first = (CS.res || {})[l.id];
   const idx = C_LESSONS.indexOf(l), nx = C_LESSONS[idx + 1];
-  const shown = ord.filter(n => cFilter === "all" ? CS.ans[n] != null : cFilter === "wrong" ? wrongRound.includes(n) : CS.ans[n] === CQ_BY[n].a);
-  const cards = shown.map(n => { const q = CQ_BY[n], ok = CS.ans[n] === q.a; return `<article class="rev"><div class="top"><span class="mark ${ok ? "ok" : "no"}">${ok ? "Đúng" : "Sai"}</span><b>Câu ${ord.indexOf(n) + 1}</b><span>Câu gốc #${n}</span><span>${q.cat === "T" ? "Bẫy" : "Dễ"}</span></div><p class="stem">${CS.hl ? cMark(q.q, q.sk) : fmt(q.q)}</p>${cReview(q, CS.ans[n])}</article>`; }).join("");
+  const shown = ord.filter(n => cFilter === "all" ? A(l)[n] != null : cFilter === "wrong" ? wrongRound.includes(n) : A(l)[n] === CQ_BY[n].a);
+  const cards = shown.map(n => { const q = CQ_BY[n], ok = A(l)[n] === q.a; return `<article class="rev"><div class="top"><span class="mark ${ok ? "ok" : "no"}">${ok ? "Đúng" : "Sai"}</span><b>Câu ${ord.indexOf(n) + 1}</b><span>Câu gốc #${n}</span><span>${l.label ? esc(l.label[n]) : l.cat === "E" ? "Dễ" : "Khó"}</span></div><p class="stem">${CS.hl ? cMark(q.q, q.sk) : fmt(q.q)}</p>${cReview(q, A(l)[n])}</article>`; }).join("");
   const nextBtn = nx ? (nx.ch !== l.ch ? `<button class="btn primary" ${cAttr({ v: "ch", c: nx.ch.id })}>Sang Chương ${nx.ch.id}</button>` : `<button class="btn primary" ${cAttr({ v: "q", l: nx.id, i: 0, fresh: 1 })}>Bài tiếp: ${esc(nx.name)}</button>`) : `<button class="btn primary" ${cAttr({ v: "home" })}>Hoàn thành khóa ôn</button>`;
   const main = left >= 0 ? `<button class="btn primary" ${cAttr({ v: "q", l: l.id, i: left })}>Làm tiếp (còn ${ord.length - d} câu)</button>`
     : !mastered ? `<button class="btn primary" id="cloop">Ôn lại ${wrongAll.length} câu sai (vòng ${round + 1})</button>`
@@ -4918,16 +4936,16 @@ function courseView() {
 function cAnswer(orig) {
   const l = C_LB[cpos.l]; if (!l) return;
   const n = cOrder[l.id][cpos.i];
-  if (CS.ans[n] != null) return;
-  CS.ans[n] = orig;
-  if (!cRound[l.id] && cDone(l.ns) === l.ns.length) { CS.res = CS.res || {}; CS.res[l.id] = { r: cRight(l.ns), n: l.ns.length, at: Date.now() }; }
+  if (A(l)[n] != null) return;
+  A(l)[n] = orig;
+  if (!cRound[l.id] && cDone(l.ns, l) === l.ns.length) { CS.res = CS.res || {}; CS.res[l.id] = { r: cRight(l.ns, l), n: l.ns.length, at: Date.now() }; }
   cSave(); render();
 }
 function cLoop() {
   const l = C_LB[cpos.l]; if (!l) return;
-  const redo = l.ns.filter(n => CS.ans[n] !== CQ_BY[n].a);
+  const redo = l.ns.filter(n => A(l)[n] !== CQ_BY[n].a);
   if (!redo.length) return;
-  redo.forEach(n => { delete CS.ans[n]; cPerm[n] = shuffled(CQ_BY[n].o.length, Math.random); });
+  redo.forEach(n => { delete A(l)[n]; cPerm[n] = shuffled(CQ_BY[n].o.length, Math.random); });
   cOrder[l.id] = shuffled(redo.length, Math.random).map(i => redo[i]);
   cRound[l.id] = (cRound[l.id] || 0) + 1;
   cSave(); cGo({ v: "q", l: l.id, i: 0 });
@@ -4951,7 +4969,7 @@ function courseKey(e) {
   const l = C_LB[cpos.l]; if (!l) return;
   const k = e.key.toUpperCase(), idx = "1234".includes(k) && k.length === 1 ? "1234".indexOf(k) : k.length === 1 ? C_LET.indexOf(k) : -1;
   const n = cOrder[l.id][cpos.i];
-  if (idx >= 0 && CS.ans[n] == null && cPerm[n][idx] != null) { e.preventDefault(); cAnswer(cPerm[n][idx]); }
+  if (idx >= 0 && A(l)[n] == null && cPerm[n][idx] != null) { e.preventDefault(); cAnswer(cPerm[n][idx]); }
   else if (e.key === "ArrowRight") { e.preventDefault(); cGo(cpos.i < l.ns.length - 1 ? { v: "q", l: l.id, i: cpos.i + 1 } : { v: "sum", l: l.id }); }
   else if (e.key === "ArrowLeft" && cpos.i > 0) { e.preventDefault(); cGo({ v: "q", l: l.id, i: cpos.i - 1 }); }
 }
@@ -4959,7 +4977,8 @@ function mergeCourse(cur, inc) {
   const a = parseJson(cur) || { ans: {}, hl: true, last: null }, b = parseJson(inc);
   if (!b || typeof b.ans !== "object") return cur;
   let added = 0;
-  for (const [n, v] of Object.entries(b.ans)) if (a.ans[n] == null && v != null) { a.ans[n] = v; added++; }
+  if (a.v !== 2 || b.v !== 2) return b.v === 2 ? inc : cur;
+  for (const [k, m] of Object.entries(b.ans)) { a.ans[k] = a.ans[k] || {}; for (const [n, v] of Object.entries(m || {})) if (a.ans[k][n] == null && v != null) { a.ans[k][n] = v; added++; } }
   if (!a.last && b.last) a.last = b.last;
   a.res = a.res || {};
   for (const [k, v] of Object.entries(b.res || {})) if (v && (!a.res[k] || (v.at || 0) > (a.res[k].at || 0))) a.res[k] = v;
