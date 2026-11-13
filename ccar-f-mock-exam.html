@@ -300,9 +300,9 @@ mark.kw { background: #ffe566; color: inherit; padding: 0 .12em; border-radius: 
 .rulesmore summary { cursor: pointer; font: 600 18px var(--display); }
 .rulesmore .crules { margin-top: 10px; }
 .rulehead { font-size: 22px; margin: 12px 0 -6px; }
-mark.kwx.pick { background: #c9f0d6 !important; color: #0b5d33 !important; text-decoration-color: #11703f !important; }
-mark.kwx.both { background: #ffe9a8 !important; color: #6b4a00 !important; text-decoration: underline dotted #b88600 !important; }
-mark.kwx { background: #ffd0cc; color: #a3160d; font-weight: 700; padding: 0 .12em; border-radius: 2px; text-decoration: underline wavy #d92d20; text-underline-offset: 3px; cursor: help; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+mark.kwx.pick { background: #c9f0d6 !important; color: #0b5d33 !important; }
+mark.kwx.both { background: #ffe9a8 !important; color: #6b4a00 !important; }
+mark.kwx { background: #ffd0cc; color: #a3160d; font-weight: 700; padding: 0 .12em; border-radius: 2px; cursor: help; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 </style>
 
 <div id="app"></div>
@@ -4745,7 +4745,6 @@ function cOpt(text, isRight, done) {
   const isW = c => /[\p{L}\p{N}_]/u.test(c || "");
   const spans = [];
   C_DROP.forEach(x => {
-    if (x.k === "both" && !done) return;
     x.rx.lastIndex = 0; let m;
     while ((m = x.rx.exec(src))) {
       if (!m[0].length) { x.rx.lastIndex++; continue; }
@@ -4757,10 +4756,10 @@ function cOpt(text, isRight, done) {
   });
   if (!spans.length) return fmt(src);
   spans.sort((a, b) => a.start - b.start);
-  const kind = isRight ? "pick" : "drop";
   let out = "", p = 0;
   for (const s of spans) {
-    const why = s.x.k === "both" ? `Hai mặt — ở câu này nằm trong ${isRight ? "đáp án đúng" : "phương án sai"}. ${s.x.why}` : `${s.x.k === "drop" ? "Thấy là loại" : "Thấy là chọn"}: ${s.x.why}`;
+    const kind = done ? (isRight ? "pick" : "drop") : s.x.k;
+    const why = s.x.k === "both" && done ? `Hai mặt — ở câu này nằm trong ${isRight ? "đáp án đúng" : "phương án sai"}. ${s.x.why}` : `${s.x.k === "drop" ? "Thấy là loại" : s.x.k === "pick" ? "Thấy là chọn" : "Hai mặt"}: ${s.x.why}`;
     out += fmt(src.slice(p, s.start)) + `<mark class="kwx ${kind}" title="${esc(why)} (cả 230 câu: đúng ${s.x.r}/${s.x.n})">${fmt(src.slice(s.start, s.end))}</mark>`;
     p = s.end;
   }
