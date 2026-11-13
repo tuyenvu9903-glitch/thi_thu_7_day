@@ -4728,7 +4728,7 @@ COURSE_CH.forEach(c => {
 });
 const C_LB = Object.fromEntries(C_LESSONS.map(l => [l.id, l]));
 let courseOpen = false, cpos = { v: "home" }, cOrder = {}, cPerm = {}, cFilter = "all";
-function cLoad() { const v = parseJson((() => { try { return localStorage.getItem(C_KEY); } catch (e) { return null; } })()); return v && typeof v.ans === "object" ? v : { ans: {}, hl: true, last: null }; }
+function cLoad() { const v = parseJson((() => { try { return localStorage.getItem(C_KEY); } catch (e) { return null; } })()); if (v && typeof v.ans === "object") { v.res = v.res || {}; return v; } return { ans: {}, res: {}, hl: true, last: null }; }
 let CS = cLoad();
 function cSave() { try { localStorage.setItem(C_KEY, JSON.stringify(CS)); } catch (e) {} }
 function cShuffle() {
@@ -4739,15 +4739,24 @@ cShuffle();
 const cDone = ns => ns.filter(n => CS.ans[n] != null).length;
 const cRight = ns => ns.filter(n => CS.ans[n] === CQ_BY[n].a).length;
 const cChapterNs = id => COURSE_Q.filter(q => q.topic === id).map(q => q.n);
-function courseStatus() {
-  const all = COURSE_Q.map(q => q.n), d = cDone(all);
-  return { cls: d === all.length ? (cRight(all) / all.length >= .7 ? "pass" : "fail") : "", text: d ? `${d}/230 câu · đúng ${cRight(all)}` : "Chưa học" };
+function cRes(l) { return (CS.res || {})[l.id] || (cDone(l.ns) === l.ns.length ? { r: cRight(l.ns), n: l.ns.length } : null); }
+function cSum(lessons) {
+  let k = 0, R = 0, N = 0;
+  lessons.forEach(l => { const x = cRes(l); if (x) { k++; R += x.r; N += x.n; } });
+  return { k, R, N, all: lessons.length };
 }
-function cStatus(ns) {
-  const d = cDone(ns), r = cRight(ns);
-  if (!d) return { cls: "", text: `Chưa học · ${ns.length} câu` };
-  if (d < ns.length) return { cls: "", text: `Đang học ${d}/${ns.length} · đúng ${r}` };
-  return { cls: r / ns.length >= .7 ? "pass" : "fail", text: `Xong · đúng ${r}/${ns.length}` };
+function cSumStatus(lessons, total) {
+  const t = cSum(lessons);
+  if (!t.k) return { cls: "", text: `Chưa học · ${total} câu` };
+  return { cls: t.k === t.all ? (t.R / t.N >= .7 ? "pass" : "fail") : "", text: `${t.k}/${t.all} bài · đúng ${t.R}/${t.N}` };
+}
+function courseStatus() { return cSumStatus(C_LESSONS, 230); }
+function cLessonStatus(l) {
+  const d = cDone(l.ns), x = (CS.res || {})[l.id];
+  if (d && d < l.ns.length) return { cls: "", text: `Đang học ${d}/${l.ns.length}` + (x ? ` · lần trước đúng ${x.r}/${x.n}` : "") };
+  const y = cRes(l);
+  if (y) return { cls: y.r / y.n >= .7 ? "pass" : "fail", text: `Lần gần nhất: đúng ${y.r}/${y.n}` };
+  return { cls: "", text: `Chưa học · ${l.ns.length} câu` };
 }
 function cMark(text, keys) {
   if (!keys || !keys.length) return fmt(text);
@@ -4773,6 +4782,12 @@ function closeCourse() {
   render(); window.scrollTo(0, 0);
 }
 function cGo(pos) {
+  if (pos.fresh && C_LB[pos.l]) {
+    const l = C_LB[pos.l];
+    l.ns.forEach(n => { delete CS.ans[n]; cPerm[n] = shuffled(CQ_BY[n].o.length, Math.random); });
+    cOrder[l.id] = shuffled(l.ns.length, Math.random).map(i => l.ns[i]);
+    pos = { v: "q", l: l.id, i: 0 }; cSave();
+  }
   cpos = pos; cFilter = "all"; mapOpen = false;
   if (pos.v === "q") { CS.last = { l: pos.l, i: pos.i }; cSave(); }
   render(); window.scrollTo(0, 0);
@@ -4785,7 +4800,7 @@ function courseHome() {
       <div class="eyebrow">CCAR-F practice · Khóa ôn</div>
       <h1>Khóa ôn 230 câu</h1>
       <p class="lead">230 câu luyện tập chia thành 7 chương theo chủ đề. Mỗi chương có <b>quy tắc cần nhớ</b>, bài <b>câu dễ</b> (từ khóa trong câu hỏi được bôi vàng, nhìn là ra đáp án) và bài <b>câu bẫy</b> (phương án sai nghe rất hợp lý). Thứ tự câu và đáp án được đảo mỗi lần mở.</p>
-      <ul class="herofacts"><li><b>230</b>câu</li><li><b>7</b>chương</li><li><b>${COURSE_Q.filter(q => q.cat === "E").length}</b>câu dễ</li><li><b>${COURSE_Q.filter(q => q.cat === "T").length}</b>câu bẫy</li><li><b>${cDone(all)}</b>đã học</li></ul>
+      <ul class="herofacts"><li><b>230</b>câu</li><li><b>7</b>chương</li><li><b>${COURSE_Q.filter(q => q.cat === "E").length}</b>câu dễ</li><li><b>${COURSE_Q.filter(q => q.cat === "T").length}</b>câu bẫy</li><li><b>${cSum(C_LESSONS).k}/${C_LESSONS.length}</b>bài đã học</li></ul>
       <div class="actions">
         ${last ? `<button class="btn primary" ${cAttr({ v: "q", l: last.id, i: Math.min(CS.last.i, last.ns.length - 1) })}>Học tiếp: Chương ${last.ch.id} · ${esc(last.name)}</button>` : `<button class="btn primary" ${cAttr({ v: "ch", c: 1 })}>Bắt đầu Chương 1</button>`}
         <button class="btn" id="cshuffle">Đảo lại câu và đáp án</button>
@@ -4794,25 +4809,25 @@ function courseHome() {
       </div>
     </div></div>
     <main class="wrap start">
-      <section><h2>Chọn chương</h2><div class="setgrid">${COURSE_CH.map(c => { const st = cStatus(cChapterNs(c.id)); return `<button class="setcard" ${cAttr({ v: "ch", c: c.id })}><b>Chương ${c.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${esc(c.title)}</span></button>`; }).join("")}</div></section>
-      <div class="note"><b>Cách học.</b> Đọc quy tắc của chương, làm bài câu dễ để nhớ từ khóa trong câu hỏi dẫn tới đáp án nào, rồi làm bài câu bẫy. Ở câu bẫy, từ khóa chỉ được bôi vàng sau khi bạn trả lời. Tiến độ khóa ôn được lưu và đồng bộ cùng tiến độ 6 đề.</div>
+      <section><h2>Chọn chương</h2><div class="setgrid">${COURSE_CH.map(c => { const st = cSumStatus(c.lessons, cChapterNs(c.id).length); return `<button class="setcard" ${cAttr({ v: "ch", c: c.id })}><b>Chương ${c.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${esc(c.title)}</span></button>`; }).join("")}</div></section>
+      <div class="note"><b>Cách học.</b> Đọc quy tắc của chương, làm bài câu dễ để nhớ từ khóa trong câu hỏi dẫn tới đáp án nào, rồi làm bài câu bẫy. Ở câu bẫy, từ khóa chỉ được bôi vàng sau khi bạn trả lời. Mỗi lần vào một bài, bài đó được làm lại từ đầu (đảo câu và đáp án); kết quả lần gần nhất của từng bài được lưu và đồng bộ cùng tiến độ 6 đề. Nút "Học tiếp" quay lại đúng chỗ đang làm dở.</div>
     </main>`;
 }
 function courseChapter(id) {
-  const c = COURSE_CH.find(x => x.id === id) || COURSE_CH[0], ns = cChapterNs(c.id), st = cStatus(ns);
+  const c = COURSE_CH.find(x => x.id === id) || COURSE_CH[0], ns = cChapterNs(c.id), st = cSumStatus(c.lessons, ns.length);
   const prev = COURSE_CH.find(x => x.id === c.id - 1), next = COURSE_CH.find(x => x.id === c.id + 1);
   return `<div class="hero"><div class="wrap">
       <div class="eyebrow">Khóa ôn · Chương ${c.id}/7</div>
       <h1>${esc(c.title)}</h1>
-      <ul class="herofacts"><li><b>${ns.length}</b>câu</li><li><b>${c.lessons.length}</b>bài</li><li><b>${cDone(ns)}</b>đã học</li><li><b>${cRight(ns)}</b>đúng</li></ul>
+      <ul class="herofacts"><li><b>${ns.length}</b>câu</li><li><b>${c.lessons.length}</b>bài</li><li><b>${cSum(c.lessons).k}/${c.lessons.length}</b>bài đã học</li><li><b>${cSum(c.lessons).R}</b>câu đúng</li></ul>
       <div class="actions">
-        <button class="btn primary" ${cAttr({ v: "q", l: c.lessons[0].id, i: 0 })}>Vào bài đầu tiên</button>
+        <button class="btn primary" ${cAttr({ v: "q", l: c.lessons[0].id, i: 0, fresh: 1 })}>Vào bài đầu tiên</button>
         <button class="btn" ${cAttr({ v: "home" })}>Về khóa ôn</button>
       </div>
     </div></div>
     <main class="wrap start">
       <section class="card"><h2>Quy tắc cần nhớ</h2><ol class="crules">${c.rules.map(r => `<li>${r}</li>`).join("")}</ol></section>
-      <section><h2>Bài học</h2><div class="setgrid">${c.lessons.map(l => { const s = cStatus(l.ns); return `<button class="setcard" ${cAttr({ v: "q", l: l.id, i: 0 })}><b>${esc(l.name)}</b><span class="setstat ${s.cls}">${s.text}</span><span class="setscen">${l.cat === "E" ? "Từ khóa trong câu hỏi → đáp án, nhìn là ra" : "Phương án sai nghe rất hợp lý, đọc kỹ"}</span></button>`; }).join("")}</div></section>
+      <section><h2>Bài học</h2><div class="setgrid">${c.lessons.map(l => { const s = cLessonStatus(l); return `<button class="setcard" ${cAttr({ v: "q", l: l.id, i: 0, fresh: 1 })}><b>${esc(l.name)}</b><span class="setstat ${s.cls}">${s.text}</span><span class="setscen">${l.cat === "E" ? "Từ khóa trong câu hỏi → đáp án, nhìn là ra" : "Phương án sai nghe rất hợp lý, đọc kỹ"}</span></button>`; }).join("")}</div></section>
       <div class="actions">${prev ? `<button class="btn" ${cAttr({ v: "ch", c: prev.id })}>← Chương ${prev.id}</button>` : ""}${next ? `<button class="btn" ${cAttr({ v: "ch", c: next.id })}>Chương ${next.id} →</button>` : ""}</div>
     </main>`;
 }
@@ -4868,7 +4883,7 @@ function courseSummary(l) {
   const idx = C_LESSONS.indexOf(l), nx = C_LESSONS[idx + 1];
   const shown = ord.filter(n => cFilter === "all" ? CS.ans[n] != null : cFilter === "wrong" ? wrong.includes(n) : CS.ans[n] === CQ_BY[n].a);
   const cards = shown.map(n => { const q = CQ_BY[n], ok = CS.ans[n] === q.a; return `<article class="rev"><div class="top"><span class="mark ${ok ? "ok" : "no"}">${ok ? "Đúng" : "Sai"}</span><b>Câu ${ord.indexOf(n) + 1}</b><span>Câu gốc #${n}</span><span>${q.cat === "T" ? "Bẫy" : "Dễ"}</span></div><p class="stem">${CS.hl ? cMark(q.q, q.sk) : fmt(q.q)}</p>${cReview(q, CS.ans[n])}</article>`; }).join("");
-  const nextBtn = nx ? (nx.ch !== l.ch ? `<button class="btn primary" ${cAttr({ v: "ch", c: nx.ch.id })}>Sang Chương ${nx.ch.id}</button>` : `<button class="btn primary" ${cAttr({ v: "q", l: nx.id, i: 0 })}>Bài tiếp: ${esc(nx.name)}</button>`) : `<button class="btn primary" ${cAttr({ v: "home" })}>Hoàn thành khóa ôn</button>`;
+  const nextBtn = nx ? (nx.ch !== l.ch ? `<button class="btn primary" ${cAttr({ v: "ch", c: nx.ch.id })}>Sang Chương ${nx.ch.id}</button>` : `<button class="btn primary" ${cAttr({ v: "q", l: nx.id, i: 0, fresh: 1 })}>Bài tiếp: ${esc(nx.name)}</button>`) : `<button class="btn primary" ${cAttr({ v: "home" })}>Hoàn thành khóa ôn</button>`;
   return `<div class="hero"><div class="wrap">
       <div class="eyebrow">Kết quả bài · Chương ${l.ch.id} · ${esc(l.ch.title)}</div>
       <div class="verdict">
@@ -4896,7 +4911,9 @@ function cAnswer(orig) {
   const l = C_LB[cpos.l]; if (!l) return;
   const n = cOrder[l.id][cpos.i];
   if (CS.ans[n] != null) return;
-  CS.ans[n] = orig; cSave(); render();
+  CS.ans[n] = orig;
+  if (cDone(l.ns) === l.ns.length) { CS.res = CS.res || {}; CS.res[l.id] = { r: cRight(l.ns), n: l.ns.length, at: Date.now() }; }
+  cSave(); render();
 }
 function cRetry() {
   const l = C_LB[cpos.l]; if (!l) return;
@@ -4935,6 +4952,8 @@ function mergeCourse(cur, inc) {
   let added = 0;
   for (const [n, v] of Object.entries(b.ans)) if (a.ans[n] == null && v != null) { a.ans[n] = v; added++; }
   if (!a.last && b.last) a.last = b.last;
+  a.res = a.res || {};
+  for (const [k, v] of Object.entries(b.res || {})) if (v && (!a.res[k] || (v.at || 0) > (a.res[k].at || 0))) a.res[k] = v;
   return JSON.stringify(a);
 }
 
