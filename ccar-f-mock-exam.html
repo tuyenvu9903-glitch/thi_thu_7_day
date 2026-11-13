@@ -4361,7 +4361,7 @@ function startView() {
     </div></div>
     <main class="wrap start">
     <section><h2>Chọn đề</h2><div class="setgrid">${SETS.map(x => { const st = setStatus(x.id); return `<button class="setcard" data-set="${x.id}" aria-pressed="${x.id === setId}"><b>Đề ${x.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${scenOrder(x.Q).map(k => SCEN_SHORT[k]).join(" · ")}</span></button>`; }).join("")}</div></section>
-    <section><h2>Practice</h2><div class="setgrid"><button class="setcard" id="openflash" aria-pressed="false"><b>Bảng phân biệt nhanh</b><span class="setstat">${flashStatus().text}</span><span class="setscen">Từ khóa trong đề bài → đáp án</span></button></div></section>
+    <section><h2>Practice</h2><div class="setgrid"><button class="setcard" id="openflash" aria-pressed="false"><b>Bảng phân biệt nhanh</b><span class="setstat">${flashStatus().text}</span><span class="setscen">Từ khóa trong đề bài → đáp án</span></button><a class="setcard" href="on-tap-ccarf-230.html" style="text-decoration:none"><b>Khóa ôn 230 câu</b><span class="setstat">7 chương · câu dễ &amp; câu bẫy</span><span class="setscen">Học theo chủ đề, trộn câu và đáp án</span></a></div></section>
     ${syncView()}
     <div class="cols">
       <section><h2>Cấu trúc bài thi</h2>
