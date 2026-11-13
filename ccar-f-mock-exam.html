@@ -309,6 +309,10 @@ mark.kwx.em { background: none !important; color: inherit !important; font-weigh
 <div id="app"></div>
 
 <script>
+if (/^#course/i.test(location.hash)) {
+  location.replace("on-tap-ccarf-230.html");
+}
+
 const SCENARIOS = {
   1: { name: "Customer Support Resolution Agent", ctx: "You are building a support agent with the Claude Agent SDK that handles returns, billing disputes, and account problems. It reaches backend systems through custom MCP tools: `get_customer`, `lookup_order`, `process_refund`, and `escalate_to_human`. The business target is at least 80% first-contact resolution without escalating cases the agent should have solved, and without keeping cases it should have handed over." },
   2: { name: "Multi-Agent Research System", ctx: "You are building a research system with the Claude Agent SDK. A coordinator delegates to specialized subagents: one searches the web, one analyzes documents, one synthesizes findings, and one writes the report. The output is a comprehensive report in which every claim can be traced to a source." },
@@ -4842,10 +4846,7 @@ function cMark(text, keys) {
   return out + fmt(src.slice(p));
 }
 function openCourse(pos) {
-  if (!canOpenFlash()) return;
-  courseOpen = true; cpos = pos || { v: "home" };
-  try { location.replace("#course"); } catch (e) { location.hash = "course"; }
-  render(); window.scrollTo(0, 0);
+  location.href = "on-tap-ccarf-230.html";
 }
 function closeCourse() {
   courseOpen = false;
@@ -5133,7 +5134,7 @@ if (S.phase !== "start") app.dataset.home = "1";
     if (ids.length) { flashFocus = ids[0]; flashHighlight = ids; }
   }
 })();
-if (/^#course/.test(location.hash) && canOpenFlash() && !flashOpen) courseOpen = true;
+if (/^#course/.test(location.hash)) { location.replace("on-tap-ccarf-230.html"); }
 render();
 if (flashOpen) scrollFlash();
 if (location.hash.startsWith("#sync=")) {
