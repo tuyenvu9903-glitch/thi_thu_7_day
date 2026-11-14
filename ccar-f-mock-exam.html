@@ -304,6 +304,10 @@ mark.kwx.pick { background: #c9f0d6 !important; color: #0b5d33 !important; }
 mark.kwx.both { background: #ffe9a8 !important; color: #6b4a00 !important; }
 mark.kwx { background: #ffd0cc; color: #a3160d; font-weight: 700; padding: 0 .12em; border-radius: 2px; cursor: help; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
 mark.kwx.em { background: none !important; color: inherit !important; font-weight: 800; padding: 0; }
+
+mark.cuehl { background: #7ed4c8; color: #073f3a; font-weight: 700; padding: 0 .14em; border-radius: 2px; text-decoration: underline; text-decoration-color: #0f766e; text-decoration-thickness: 2px; text-underline-offset: 2px; box-decoration-break: clone; -webkit-box-decoration-break: clone; }
+.ro .is mark.cuehl { background: #4fbfb0; }
+span.cuelab { display: inline-block; margin-left: .35em; font: 700 12px/1.4 var(--sans); color: #0f5f57; background: #d8f7f2; border: 1px solid #0f766e; border-radius: 999px; padding: 0 7px; vertical-align: middle; white-space: nowrap; }
 </style>
 
 <div id="app"></div>
@@ -4513,6 +4517,196 @@ function rowsHtml(map, names) {
   }).join("");
 }
 
+/* Review-only cues: a memorable 4–6-word opening or ending of each correct
+   answer. If a short opening is unique across the option pool, use the head
+   phrase; otherwise the tail. Course cues (deduped 230-question bank) are
+   reused when the option text matches; any other correct answer is computed
+   with the same rule over the full option pool. Never used while answering. */
+const C_STOP = new Set("a an the to of and or in on for with at by from as is be are was were it its this that these those than then but if into over after before about via per not no so do does did can may must should will would could have has had their them they we you your our when which who whom what how there here also just only more most other such same both each few many some any all own too very up out off down between through during without within upon among against under above again further once because until while although whether nor either".split(" "));
+function cWords(src) {
+  const tokens = [];
+  const re = /\S+/g;
+  let m;
+  while ((m = re.exec(src))) {
+    let raw = m[0], start = m.index;
+    const left = raw.match(/^[^\p{L}\p{N}]+/u);
+    if (left) { start += left[0].length; raw = raw.slice(left[0].length); }
+    const right = raw.match(/[^\p{L}\p{N}]+$/u);
+    if (right) raw = raw.slice(0, raw.length - right[0].length);
+    if (!raw) continue;
+    const norm = raw.toLowerCase().replace(/['\u2018\u2019\u201C\u201D"]+/g, "");
+    if (!norm) continue;
+    tokens.push({ start, end: start + raw.length, norm });
+  }
+  return tokens;
+}
+function cOptKey(tk, start, end) {
+  return tk.slice(start, end).map(t => t.norm).join("\0");
+}
+function cExpandSpan(src, a, b) {
+  while (a > 0 && /[^\p{L}\p{N}\s]/u.test(src[a - 1])) a--;
+  while (b < src.length && /[^\p{L}\p{N}\s]/u.test(src[b])) b++;
+  return [a, b];
+}
+const C_CUE_END_BAD = new Set("a an the to of and or for with at by from as about into where so than then but if".split(" "));
+function cCueContent(norm) { return !C_STOP.has(norm); }
+function cCuePunctAfter(src, tk, i) {
+  if (i >= tk.length - 1) return true;
+  return /[,.;:!?—–]/.test(src.slice(tk[i].end, tk[i + 1].start));
+}
+function cCueIndex(texts) {
+  const uniq = [];
+  const seen = new Set();
+  texts.forEach(text => {
+    const tk = cWords(String(text));
+    const k = tk.map(t => t.norm).join("\0");
+    if (!k || seen.has(k)) return;
+    seen.add(k);
+    uniq.push(tk);
+  });
+  const maxK = Math.max(1, ...uniq.map(tk => tk.length));
+  const headCounts = [null], tailCounts = [null];
+  for (let k = 1; k <= maxK; k++) {
+    const hm = new Map(), tm = new Map();
+    uniq.forEach(tk => {
+      if (tk.length >= k) {
+        const hk = cOptKey(tk, 0, k);
+        hm.set(hk, (hm.get(hk) || 0) + 1);
+        const tkey = cOptKey(tk, tk.length - k, tk.length);
+        tm.set(tkey, (tm.get(tkey) || 0) + 1);
+      }
+    });
+    headCounts[k] = hm;
+    tailCounts[k] = tm;
+  }
+  function uHead(tk) {
+    for (let k = 1; k <= tk.length; k++) {
+      if ((headCounts[k].get(cOptKey(tk, 0, k)) || 0) === 1) return k;
+    }
+    return Infinity;
+  }
+  function uTail(tk) {
+    for (let k = 1; k <= tk.length; k++) {
+      if ((tailCounts[k].get(cOptKey(tk, tk.length - k, tk.length)) || 0) === 1) return k;
+    }
+    return Infinity;
+  }
+  function uniqHead(tk, k) { return k <= tk.length && (headCounts[k].get(cOptKey(tk, 0, k)) || 0) === 1; }
+  function uniqTail(tk, k) { return k <= tk.length && (tailCounts[k].get(cOptKey(tk, tk.length - k, tk.length)) || 0) === 1; }
+  function headTake(tk, src, uH) {
+    const maxT = Math.min(8, tk.length), minT = Math.min(4, tk.length);
+    let k = Math.min(Math.max(minT, isFinite(uH) ? uH : minT), maxT);
+    while (k < maxT && !uniqHead(tk, k)) k++;
+    while (k < maxT && !cCueContent(tk[k - 1].norm)) k++;
+    if (k + 1 <= maxT && tk[k] && tk[k].norm === "to" && tk[k + 1] && cCueContent(tk[k + 1].norm) && !cCuePunctAfter(src, tk, k - 1)) k += 2;
+    while (k < 6 && k < maxT && tk[k] && cCueContent(tk[k].norm) && !cCuePunctAfter(src, tk, k - 1)) {
+      if (cCueContent(tk[k - 1].norm) && tk[k - 1].norm.length >= 4 && k >= 4) break;
+      k++;
+      while (k < maxT && !cCueContent(tk[k - 1].norm)) k++;
+    }
+    while (k < maxT && !uniqHead(tk, k)) k++;
+    while (k > minT && C_CUE_END_BAD.has(tk[k - 1].norm) && uniqHead(tk, k - 1)) k--;
+    return k;
+  }
+  function tailTake(tk, src, uT) {
+    const maxT = Math.min(8, tk.length), minT = Math.min(4, tk.length);
+    let k = Math.min(Math.max(minT, isFinite(uT) ? uT : minT), maxT);
+    while (k < maxT && !uniqTail(tk, k)) k++;
+    const first = () => tk[tk.length - k];
+    while (k < maxT && first() && (!cCueContent(first().norm) || /^(and|or|but|then|nor|also)$/.test(first().norm))) k++;
+    while (k < maxT && !uniqTail(tk, k)) k++;
+    return k;
+  }
+  function cueScore(tk, start, end) {
+    const slice = tk.slice(start, end);
+    let content = 0, longw = 0;
+    slice.forEach(tok => {
+      if (cCueContent(tok.norm)) {
+        content++;
+        if (tok.norm.length >= 5) longw++;
+      }
+    });
+    let s = content * 3 + longw * 2 - (slice.length - content) * 2 + Math.min(slice.length, 6) * 0.3;
+    if (C_CUE_END_BAD.has(tk[end - 1].norm)) s -= 12;
+    if (start > 0 && (C_CUE_END_BAD.has(tk[start].norm) || /^(and|or|but|then)$/.test(tk[start].norm))) s -= 6;
+    return s;
+  }
+  function cueFromText(src) {
+    src = String(src);
+    const tk = cWords(src);
+    const h = uHead(tk), tlen = uTail(tk);
+    const ht = tk.length ? headTake(tk, src, h) : 0;
+    const tt = tk.length ? tailTake(tk, src, tlen) : 0;
+    const headOk = ht && uniqHead(tk, ht);
+    const tailOk = tt && uniqTail(tk, tt);
+    const headElig = headOk && (h <= 8);
+    let kind;
+    if (headElig && tailOk) {
+      const hs = cueScore(tk, 0, ht), ts = cueScore(tk, tk.length - tt, tk.length);
+      if (hs > ts + 0.8) kind = "đầu";
+      else if (ts > hs + 0.8) kind = "đuôi";
+      else kind = h <= 6 ? "đầu" : "đuôi";
+    } else if (headElig) kind = "đầu";
+    else if (tailOk) kind = "đuôi";
+    else kind = (ht && (!tt || ht <= tt)) ? "đầu" : "đuôi";
+    const take = kind === "đầu" ? ht : tt;
+    let a = 0, b = 0;
+    if (take && tk.length) {
+      if (kind === "đầu") [a, b] = cExpandSpan(src, tk[0].start, tk[take - 1].end);
+      else [a, b] = cExpandSpan(src, tk[tk.length - take].start, tk[tk.length - 1].end);
+    }
+    return {
+      kind,
+      title: kind === "đầu" ? "Nhớ đầu" : "Nhớ đuôi",
+      tip: kind === "đầu" ? "Đầu cần nhớ của đáp án đúng" : "Đuôi cần nhớ của đáp án đúng",
+      cueStart: a, cueEnd: b, text: src.slice(a, b).trim()
+    };
+  }
+  return { cueFromText };
+}
+function cBuildCues(questions) {
+  const idx = cCueIndex(questions.flatMap(q => q.o));
+  const cues = new Map();
+  questions.forEach(q => cues.set(q.n, idx.cueFromText(String(q.o[q.a]))));
+  return cues;
+}
+function cCuePoolTexts() {
+  const texts = [];
+  const bank = (typeof COURSE_BANK !== "undefined") ? COURSE_BANK : COURSE_Q;
+  bank.forEach(q => q.o.forEach(t => texts.push(t)));
+  SETS.forEach(s => s.Q.forEach(q => q.o.forEach(t => texts.push(t))));
+  return texts;
+}
+function cCueRemap(cue, src) {
+  if (!cue || !cue.text) return null;
+  if (src.slice(cue.cueStart, cue.cueEnd) === cue.text) return cue;
+  const a = src.indexOf(cue.text);
+  if (a < 0) return null;
+  return Object.assign({}, cue, { cueStart: a, cueEnd: a + cue.text.length });
+}
+function cueForExamAnswer(q, orig) {
+  const src = String(q.o[orig]);
+  if (q.n != null && C_CUES.has(q.n)) {
+    const hit = cCueRemap(C_CUES.get(q.n), src);
+    if (hit) return hit;
+  }
+  const hit = cCueRemap(C_CUE_BY_TEXT.get(src), src);
+  if (hit) return hit;
+  return C_CUE_FALLBACK.cueFromText(src);
+}
+function fmtCueOption(q, orig) {
+  const src = String(q.o[orig]);
+  const cue = cueForExamAnswer(q, orig);
+  if (!cue || cue.cueEnd <= cue.cueStart) return fmt(src);
+  return fmt(src.slice(0, cue.cueStart)) + `<mark class="cuehl" title="${esc(cue.tip)}">${fmt(src.slice(cue.cueStart, cue.cueEnd))}</mark><span class="cuelab">Học: ${esc(cue.kind)}</span>` + fmt(src.slice(cue.cueEnd));
+}
+const C_CUE_DROP = new Set([182,179,176,187,184,197,185,183,186,196,165,173,201,172,170,206,193,188,194,200,190,195,180,202,159,163,205,198]);
+const C_CUE_SOURCE = COURSE_Q.filter(q => !C_CUE_DROP.has(q.n));
+const C_CUES = cBuildCues(C_CUE_SOURCE);
+const C_CUE_BY_TEXT = new Map();
+C_CUE_SOURCE.forEach(q => { const cue = C_CUES.get(q.n); if (cue && cue.text) C_CUE_BY_TEXT.set(String(q.o[q.a]), cue); });
+const C_CUE_FALLBACK = cCueIndex(cCuePoolTexts());
+
 function resultView() {
   const R = grade(QUESTIONS, S.answers);
   const blank = R.items.filter(x => x.blank).length, wrong = R.items.filter(x => !x.ok && !x.blank).length;
@@ -4532,7 +4726,7 @@ function resultView() {
       const tag = elimOf(x.index, orig);
       const cls = (is ? "is" : picked ? "wrongpick" : "") + (tag ? " elim" : "");
       const why = is && picked ? "Đúng · bạn chọn" : is ? "Đáp án đúng" : picked ? "Bạn chọn" : "";
-      return `<div class="${cls}"><span class="ltr">${LETTERS[n]}</span><span>${fmt(q.o[orig])}</span><span class="why">${why}</span>${tag ? `<span class="elimnote">Loại: ${fmt(tag.t)}. ${fmt(tag.why)}</span>` : ""}</div>`;
+      return `<div class="${cls}"><span class="ltr">${LETTERS[n]}</span><span>${is ? fmtCueOption(q, orig) : fmt(q.o[orig])}</span><span class="why">${why}</span>${tag ? `<span class="elimnote">Loại: ${fmt(tag.t)}. ${fmt(tag.why)}</span>` : ""}</div>`;
     }).join("");
     const mark = x.ok ? `<span class="mark ok">Đúng</span>` : x.blank ? `<span class="mark blank">Bỏ trống</span>` : `<span class="mark no">Sai</span>`;
     const diffs = tablesFor(q);
@@ -4709,7 +4903,7 @@ function buildReport(R) {
     const opts = S.perm[x.index].map((orig, n) => {
       const is = q.a.includes(orig), picked = x.sel.includes(orig), tag = elimOf(x.index, orig);
       const note = is && picked ? "Đúng · bạn chọn" : is ? "Đáp án đúng" : picked ? "Bạn chọn" : "";
-      return `<li class="${is ? "ok" : picked ? "no" : ""}"><b>${LETTERS[n]}.</b> ${fmt(q.o[orig])}${note ? ` <em>${note}</em>` : ""}${tag ? `<small>Loại: ${fmt(tag.t)}. ${fmt(tag.why)}</small>` : ""}</li>`;
+      return `<li class="${is ? "ok" : picked ? "no" : ""}"><b>${LETTERS[n]}.</b> ${is ? fmtCueOption(q, orig) : fmt(q.o[orig])}${note ? ` <em>${note}</em>` : ""}${tag ? `<small>Loại: ${fmt(tag.t)}. ${fmt(tag.why)}</small>` : ""}</li>`;
     }).join("");
     return `<article class="${x.ok ? "right" : "bad"}"><h3>Câu ${x.index + 1} · ${statusOf(x)}</h3><p class="meta">${q.n ? `Câu gốc #${q.n}` : `Task ${q.t}`} · ${esc(SCENARIOS[q.s].name)}${q.a.length > 1 ? ` · Select ${COUNT[q.a.length]}` : ""}${S.flags[x.index] ? " · Đã đánh dấu" : ""}</p><p>${fmt(q.q)}</p><ul>${opts}</ul><p class="exp">${fmt(q.e)}</p></article>`;
   }).join("");
@@ -4717,7 +4911,7 @@ function buildReport(R) {
 body{font:16px/1.55 "Segoe UI",system-ui,sans-serif;color:#16222f;background:#fff;max-width:800px;margin:0 auto;padding:24px 16px}h1{font-size:26px;margin:0}h2{font-size:18px;margin:28px 0 8px}h3{font-size:16px;margin:0}
 code{font:.9em Menlo,Consolas,monospace;background:#eef2f6;padding:0 .3em;overflow-wrap:anywhere}table{width:100%;border-collapse:collapse}td{padding:6px 0;border-bottom:1px solid #d5dde5}.n{text-align:right;white-space:nowrap;padding-left:12px}
 .score{font-size:48px;font-weight:700;margin:12px 0 0}.meta{color:#566676;font-size:14px;margin:2px 0 8px}article{border-top:2px solid #d5dde5;padding:14px 0;break-inside:avoid}article.bad{border-top-color:#b42323}
-ul{list-style:none;padding:0;margin:8px 0;display:grid;gap:4px}li{padding:6px 10px}li.ok{background:#dff3e7}li.no{background:#fbe5e3}em{font-style:normal;font-weight:600;font-size:13px}small{display:block;color:#5c4800;margin-top:2px}.exp{border-left:3px solid #0b5cad;padding-left:10px;margin:8px 0 0}
+ul{list-style:none;padding:0;margin:8px 0;display:grid;gap:4px}li{padding:6px 10px}li.ok{background:#dff3e7}li.no{background:#fbe5e3}em{font-style:normal;font-weight:600;font-size:13px}small{display:block;color:#5c4800;margin-top:2px}.exp{border-left:3px solid #0b5cad;padding-left:10px;margin:8px 0 0}mark.cuehl{background:#7ed4c8;color:#073f3a;font-weight:700;padding:0 .14em;border-radius:2px;text-decoration:underline;text-decoration-color:#0f766e}span.cuelab{display:inline-block;margin-left:.35em;font:700 12px/1.4 sans-serif;color:#0f5f57;background:#d8f7f2;border:1px solid #0f766e;border-radius:999px;padding:0 7px;vertical-align:middle;white-space:nowrap}
 </style></head><body><h1>Kết quả thi thử CCAR-F · Đề ${setName(setId)}</h1><p class="meta">Đề luyện tập không chính thức · ${new Date(S.endedAt).toLocaleString("vi-VN")}</p>
 <p class="score">${R.scaled}/1000 · ${R.passed ? "Đạt" : "Chưa đạt"}</p><p>Đúng ${R.correct}/60 · sai ${wrong} · bỏ trống ${blank} · thời gian ${clock(S.endedAt - S.startedAt)}${S.hintUsed ? " · có bật gợi ý loại" : ""}. Điểm ước lượng theo công thức tuyến tính.</p>
 <h2>Theo domain</h2>${table(R.byDomain, domNames)}<h2>Theo tình huống</h2>${table(R.byScenario, scNames)}<h2>Chi tiết 60 câu</h2>${cards}</body></html>`;
