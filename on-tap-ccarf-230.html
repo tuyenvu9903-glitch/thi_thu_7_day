@@ -298,7 +298,7 @@ mark.kw { background: #ffe566; color: inherit; padding: 0 .12em; border-radius: 
 .sig.drop { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
 .sig.pick { background: var(--good-soft); border-color: var(--good); color: var(--good); }
 .sig.both { background: var(--warn-soft); color: var(--warn); }
-.sigcard { padding-block: 16px; }
+.sigcard { padding-block: 16px; } .edgelbl { font-weight: 700; margin: 10px 0 6px; }
 .rulesmore summary { cursor: pointer; font: 600 18px var(--display); }
 .rulesmore .crules { margin-top: 10px; }
 .rulehead { font-size: 22px; margin: 12px 0 -6px; }
@@ -4771,6 +4771,51 @@ function cSigTable(list, kind) {
   return `<div class="sigs">${list.map(x => `<span class="sig ${kind}" title="${esc(x.why)} · Cả 230 câu: đúng ${x.all[0]}, sai ${x.all[1]}">${kind === "drop" ? "✕" : kind === "pick" ? "✓" : "⚖"} ${esc(x.w)} <small>${x.all[0]}/${x.all[0] + x.all[1]}</small></span>`).join("")}</div>`;
 }
 const C_DROP = [{"w": "more capable model · upgrade · model tier", "why": "Đổi sang model mạnh hơn không sửa được lỗi thiết kế", "re": "more capable|model tier|larger model|upgrade|haiku-tier|smaller, cheaper", "r": 0, "n": 16, "k": "drop"}, {"w": "temperature", "why": "Chỉnh temperature không sửa lỗi định dạng hay hiểu sai", "re": "temperature", "r": 0, "n": 7, "k": "drop"}, {"w": "detailed …", "why": "\"Thêm hướng dẫn/ví dụ/checklist chi tiết\" — dài hơn chứ không đúng hơn", "re": "\\bdetailed\\b", "r": 0, "n": 31, "k": "drop"}, {"w": "comprehensive", "why": "Kế hoạch/đặc tả \"toàn diện\" làm trước — quá nặng", "re": "comprehensive", "r": 0, "n": 8, "k": "drop"}, {"w": "always · never", "why": "Câu tuyệt đối hoá", "re": "\\balways\\b|\\bnever\\b", "r": 1, "n": 19, "k": "both"}, {"w": "entire · all files · every", "why": "Đọc/làm lại toàn bộ — lãng phí", "re": "\\bentire\\b|all \\d+ files|all files|\\bevery\\b", "r": 3, "n": 33, "k": "both"}, {"w": "manually", "why": "Làm tay", "re": "manual", "r": 0, "n": 13, "k": "drop"}, {"w": "post-processing", "why": "Sửa sau bằng code thay vì sửa gốc", "re": "post-process", "r": 0, "n": 18, "k": "drop"}, {"w": "retry logic · exponential backoff", "why": "Retry chung chung", "re": "retry logic|retries|exponential backoff", "r": 2, "n": 18, "k": "both"}, {"w": "classifier · train", "why": "Classifier/luật định tuyến cố định", "re": "classif|\\btrain\\b", "r": 0, "n": 15, "k": "drop"}, {"w": "semantic search · vector · embedding", "why": "Vector/semantic search thay cho ngữ cảnh", "re": "semantic (search|similarity|dedup|embedding|index)|vector|embedding", "r": 0, "n": 11, "k": "drop"}, {"w": "sliding window · truncate", "why": "Cắt bớt lịch sử", "re": "sliding window|rolling window|truncat", "r": 2, "n": 11, "k": "both"}, {"w": "most recent", "why": "\"Luôn lấy cái mới nhất\"", "re": "most recent", "r": 0, "n": 9, "k": "drop"}, {"w": "paste", "why": "Dán thủ công vào prompt", "re": "\\bpaste", "r": 0, "n": 2, "k": "drop"}, {"w": "a second call · verification step", "why": "Thêm một lượt gọi/agent kiểm tra", "re": "second (llm|claude|call)|separate (api|llm) call|verification (step|pass|subagent)|a second", "r": 0, "n": 19, "k": "drop"}, {"w": "regex · keyword/pattern matching", "why": "So khớp chuỗi cứng", "re": "regex|regular expression|keyword matching|pattern matching", "r": 0, "n": 10, "k": "drop"}, {"w": "Remove … · entirely", "why": "Gỡ hẳn tool/bỏ hẳn bước", "re": "^remove|remove (grep|the write)|entirely", "r": 0, "n": 15, "k": "drop"}, {"w": "fixed · predefined · upfront", "why": "Kế hoạch cố định làm trước", "re": "\\bfixed\\b|predefined|upfront", "r": 2, "n": 15, "k": "both"}, {"w": "/clear · start fresh · fresh sessions", "why": "Xoá sạch rồi làm lại từ đầu", "re": "/clear|start (two )?fresh|fresh session", "r": 1, "n": 15, "k": "both"}, {"w": "max_tokens · context window", "why": "Tăng giới hạn token/context", "re": "max_tokens|context window", "r": 1, "n": 18, "k": "both"}, {"w": "strengthen · emphatic · CRITICAL", "why": "Nhấn mạnh hơn trong prompt", "re": "strengthen|emphasis|emphatic|critical", "r": 4, "n": 10, "k": "both"}, {"w": "add … to the system prompt", "why": "Thêm dòng vào system prompt", "re": "(add|include|insert)[^.]{0,60}(to|in) (the|your) system prompt", "r": 1, "n": 18, "k": "both"}, {"w": "nightly · audit · log", "why": "Kiểm tra/ghi log sau khi đã xảy ra", "re": "nightly|audit|logs? (the|which|bash)", "r": 0, "n": 5, "k": "drop"}, {"w": "sentiment analysis · frustration", "why": "Đo cảm xúc để quyết định", "re": "sentiment analysis|frustration (score|indicator)", "r": 0, "n": 1, "k": "drop"}, {"w": "immediately", "why": "Làm ngay không cân nhắc", "re": "immediately", "r": 2, "n": 17, "k": "both"}, {"w": "Keep · Switch · Make · Continue · Enable · Increase · Lower · Export (đầu câu)", "why": "Phương án mở đầu bằng các động từ này", "re": "^(keep|switch|make|continue|enable|increase|upgrade|lower|train|export|build)\\b", "r": 0, "n": 71, "k": "drop"}, {"w": "structured (summary · handoff · error · data · metadata · state · output)", "why": "Dữ liệu/kết quả có cấu trúc", "re": "structured (summary|handoff|error|data|metadata|report|export|state|claim|source|output|object)", "r": 24, "n": 25, "k": "both"}, {"w": "fork_session", "why": "Hai hướng song song từ cùng phân tích", "re": "fork_session", "r": 6, "n": 6, "k": "pick"}, {"w": "claim-source · source metadata · source index · dates", "why": "Giữ nguồn trích dẫn", "re": "claim-source|source metadata|source index|publication or data collection dates", "r": 6, "n": 6, "k": "pick"}, {"w": "calculated_total · \"other\"", "why": "Thêm chỗ chứa trong schema", "re": "calculated_total|\"other\"", "r": 5, "n": 5, "k": "pick"}, {"w": "return null", "why": "Hướng dẫn trả null khi không có thông tin", "re": "return null", "r": 3, "n": 3, "k": "pick"}, {"w": "interview", "why": "Để Claude phỏng vấn trước", "re": "interview", "r": 2, "n": 2, "k": "pick"}, {"w": "--resume · --append-system-prompt · --disallowedTools · --max-turns · --bare", "why": "Đúng cờ CLI chuyên dụng", "re": "--resume|--append-system-prompt|--disallowedtools|--max-turns|--bare", "r": 5, "n": 6, "k": "both"}, {"w": "single response · \"Task\"", "why": "Nhiều Task call trong một response / thiếu \"Task\"", "re": "single response|\"task\"", "r": 6, "n": 6, "k": "pick"}, {"w": "acknowledge", "why": "Ghi nhận rồi đề nghị lựa chọn", "re": "acknowledge", "r": 4, "n": 6, "k": "both"}, {"w": "few-shot", "why": "Hai mặt: đúng khi lỗi diễn giải/định dạng; bẫy khi cần đảm bảo 100% hay thiếu dữ liệu", "re": "few-shot", "r": 9, "n": 36, "k": "both"}, {"w": "tool description", "why": "Hai mặt: đúng khi model chọn nhầm/không dùng tool; bẫy khi tool cần tách/gộp", "re": "description", "r": 12, "n": 30, "k": "both"}, {"w": "subagent", "why": "Hai mặt: đúng khi việc tách được thành câu hỏi con; bẫy khi coordinator tự làm được", "re": "sub-?agent", "r": 20, "n": 85, "k": "both"}, {"w": "escalate", "why": "Hai mặt: đúng khi khách đòi/ngoài quyền hạn; bẫy khi giải quyết được ngay", "re": "escalat", "r": 13, "n": 47, "k": "both"}, {"w": "hook", "why": "Hai mặt: đúng khi cần đảm bảo 100%; bẫy khi chỉ cần tool tự chặn hoặc cờ CLI", "re": "\\bhook\\b", "r": 5, "n": 12, "k": "both"}, {"w": "plan mode · direct execution", "why": "Hai mặt: lỗi rõ chỗ/nhỏ → direct; lớn, nhiều file → plan", "re": "plan mode|direct execution", "r": 4, "n": 14, "k": "both"}, {"w": "summarize", "why": "Hai mặt: đúng khi cần giữ mạch; bẫy khi dữ kiện phải chính xác", "re": "summar", "r": 19, "n": 51, "k": "both"}, {"w": "batch", "why": "Hai mặt: đúng khi không gấp; bẫy khi cần kết quả ngay", "re": "batch", "r": 4, "n": 16, "k": "both"}, {"w": "CLAUDE.md", "why": "Hai mặt: chuẩn chung cả team; bẫy khi việc một lần/riêng từng loại file", "re": "claude\\.md", "r": 5, "n": 23, "k": "both"}].map(x => Object.assign(x, { rx: new RegExp(x.re, "gi") })).sort((a, b) => ({ drop: 0, pick: 1, both: 2 })[a.k] - ({ drop: 0, pick: 1, both: 2 })[b.k]);
+/* Opening / closing 1–3 words of every option, counted live over the whole bank.
+   Kept only when seen at least C_EDGE_MIN times and ALWAYS right or ALWAYS wrong. */
+const C_EDGE_MIN = 3;
+function cEdgeStats() {
+  const words = o => o.trim().replace(/[.;:!?]+$/, "").replace(/[“”"]/g, "").split(/\s+/)
+    .map(w => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}'%\-_.\/>]+$/gu, "").toLowerCase()).filter(Boolean);
+  const C = { S: {}, E: {} };
+  COURSE_Q.filter(q => !q.cls).forEach(q => q.o.forEach((o, i) => {
+    if (/^[\d\s,]+$/.test(o)) return;
+    const ok = Array.isArray(q.a) ? q.a.includes(i) : q.a === i, w = words(o);
+    for (const L of [1, 2, 3]) if (w.length > L) for (const [side, k] of [["S", w.slice(0, L).join(" ")], ["E", w.slice(-L).join(" ")]]) {
+      const e = C[side][k] || (C[side][k] = { a: 0, n: 0, L }); e.n++; if (ok) e.a++;
+    }
+  }));
+  const pick = side => {
+    const rows = Object.entries(C[side]).filter(([k, e]) => e.n >= C_EDGE_MIN && (e.a === 0 || e.a === e.n));
+    // a longer phrase is dropped when a shorter part of it is already listed with the same verdict
+    const listed = new Set(rows.map(([k, e]) => k + "|" + (e.a === 0)));
+    const keep = rows.filter(([k, e]) => {
+      const w = k.split(" ");
+      for (let L = 1; L < w.length; L++) {
+        const sh = (side === "S" ? w.slice(0, L) : w.slice(-L)).join(" ");
+        if (listed.has(sh + "|" + (e.a === 0))) return false;
+      }
+      return true;
+    }).sort((x, y) => y[1].n - x[1].n || x[0].localeCompare(y[0]));
+    return { ok: keep.filter(([, e]) => e.a === e.n), bad: keep.filter(([, e]) => e.a === 0) };
+  };
+  return { S: pick("S"), E: pick("E") };
+}
+function cEdgeTable(rows, kind, side) {
+  if (!rows.length) return `<p class="empty">Không có cụm nào.</p>`;
+  return `<div class="sigs">${rows.map(([k, e]) => {
+    const label = side === "S" ? `${k[0].toUpperCase()}${k.slice(1)} …` : `… ${k}`;
+    return `<span class="sig ${kind}" title="Cả ${COURSE_Q.length} câu: đúng ${e.a}, sai ${e.n - e.a}">${kind === "drop" ? "✕" : "✓"} ${esc(label)} <small>${e.a}/${e.n}</small></span>`;
+  }).join("")}</div>`;
+}
+function cEdgeCard() {
+  const s = cEdgeStats();
+  return `<section class="card sigcard edge"><h2>⚡ Nhìn 2–3 từ đầu / cuối phương án</h2><p class="sub">Áp dụng cho tất cả các chương. Chỉ giữ cụm xuất hiện từ ${C_EDGE_MIN} lần trở lên và <b>đúng 100%</b> hoặc <b>sai 100%</b> trong cả ${COURSE_Q.length} câu. Số nhỏ = số lần đúng / tổng số lần xuất hiện.</p>
+    <p class="edgelbl">Mở đầu → chọn (đúng 100%)</p>${cEdgeTable(s.S.ok, "pick", "S")}
+    <p class="edgelbl">Mở đầu → loại (sai 100%)</p>${cEdgeTable(s.S.bad, "drop", "S")}
+    <p class="edgelbl">Kết thúc → chọn (đúng 100%)</p>${cEdgeTable(s.E.ok, "pick", "E")}
+    <p class="edgelbl">Kết thúc → loại (sai 100%)</p>${cEdgeTable(s.E.bad, "drop", "E")}</section>`;
+}
 /* Compare options from the END. Shared suffix is yellow; the few
    differing words just before it (or the last few words if there is
    no shared suffix) are the cue: bold while answering, green/red after.
@@ -5134,6 +5179,7 @@ function courseHome() {
     </div></div>
     <main class="wrap start">
       <section><h2>Chọn chương</h2><div class="setgrid">${COURSE_CH.map(c => { const st = cSumStatus(c.lessons, cChapterNs(c.id).length); return `<button class="setcard" ${cAttr({ v: "ch", c: c.id })}><b>Chương ${c.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${esc(c.title)}</span></button>`; }).join("")}</div></section>
+      ${cEdgeCard()}
       <div class="note"><b>Cách học.</b> Đọc quy tắc của chương, làm bài câu dễ rồi tới câu khó. Sau khi trả lời, chỉ tô đáp án đúng, một cụm <b>khoảng 4–6 chữ có nghĩa</b>: nếu phần đầu đáp án đúng <b>không trùng với bất kỳ đáp án nào khác trong cả khóa</b> (khoảng 800 đáp án) thì nhớ cụm đầu (dòng "Nhớ đầu:", ví dụ "Ask one clarifying question"); nếu không thì nhớ cụm đuôi (dòng "Nhớ đuôi:", ví dụ "identify the root cause"). Phương án sai không được tô, không bôi vàng cụm đầu chung. Mỗi lần vào một bài, bài đó được làm lại từ đầu (đảo câu và đáp án); kết quả lần gần nhất của từng bài được lưu và đồng bộ cùng tiến độ 6 đề. Nút "Học tiếp" quay lại đúng chỗ đang làm dở.</div>
     </main>`;
 }
