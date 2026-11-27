@@ -298,7 +298,7 @@ mark.kw { background: #ffe566; color: inherit; padding: 0 .12em; border-radius: 
 .sig.drop { background: var(--bad-soft); border-color: var(--bad); color: var(--bad); }
 .sig.pick { background: var(--good-soft); border-color: var(--good); color: var(--good); }
 .sig.both { background: var(--warn-soft); color: var(--warn); }
-.sigcard { padding-block: 16px; }
+.sigcard { padding-block: 16px; } .edgelbl { font-weight: 700; margin: 10px 0 6px; }
 .rulesmore summary { cursor: pointer; font: 600 18px var(--display); }
 .rulesmore .crules { margin-top: 10px; }
 .rulehead { font-size: 22px; margin: 12px 0 -6px; }
@@ -361,6 +361,51 @@ let cPend = {};
 function cSigTable(list, kind) {
   if (!list || !list.length) return `<p class="empty">Chương này không có cụm nào đủ chắc chắn.</p>`;
   return `<div class="sigs">${list.map(x => `<span class="sig ${kind}" title="${esc(x.why)} · Cả ${COURSE_Q.length} câu: đúng ${x.all[0]}, sai ${x.all[1]}">${kind === "drop" ? "✕" : kind === "pick" ? "✓" : "⚖"} ${esc(x.w)} <small>${x.all[0]}/${x.all[0] + x.all[1]}</small></span>`).join("")}</div>`;
+}
+/* Opening / closing 1–3 words of every option, counted live over the whole bank.
+   Kept only when seen at least C_EDGE_MIN times and ALWAYS right or ALWAYS wrong. */
+const C_EDGE_MIN = 3;
+function cEdgeStats() {
+  const words = o => o.trim().replace(/[.;:!?]+$/, "").replace(/[“”"]/g, "").split(/\s+/)
+    .map(w => w.replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}'%\-_.\/>]+$/gu, "").toLowerCase()).filter(Boolean);
+  const C = { S: {}, E: {} };
+  COURSE_Q.filter(q => !q.cls).forEach(q => q.o.forEach((o, i) => {
+    if (/^[\d\s,]+$/.test(o)) return;
+    const ok = cIsA(q, i), w = words(o);
+    for (const L of [1, 2, 3]) if (w.length > L) for (const [side, k] of [["S", w.slice(0, L).join(" ")], ["E", w.slice(-L).join(" ")]]) {
+      const e = C[side][k] || (C[side][k] = { a: 0, n: 0, L }); e.n++; if (ok) e.a++;
+    }
+  }));
+  const pick = side => {
+    const rows = Object.entries(C[side]).filter(([k, e]) => e.n >= C_EDGE_MIN && (e.a === 0 || e.a === e.n));
+    // a longer phrase is dropped when a shorter part of it is already listed with the same verdict
+    const listed = new Set(rows.map(([k, e]) => k + "|" + (e.a === 0)));
+    const keep = rows.filter(([k, e]) => {
+      const w = k.split(" ");
+      for (let L = 1; L < w.length; L++) {
+        const sh = (side === "S" ? w.slice(0, L) : w.slice(-L)).join(" ");
+        if (listed.has(sh + "|" + (e.a === 0))) return false;
+      }
+      return true;
+    }).sort((x, y) => y[1].n - x[1].n || x[0].localeCompare(y[0]));
+    return { ok: keep.filter(([, e]) => e.a === e.n), bad: keep.filter(([, e]) => e.a === 0) };
+  };
+  return { S: pick("S"), E: pick("E") };
+}
+function cEdgeTable(rows, kind, side) {
+  if (!rows.length) return `<p class="empty">Không có cụm nào.</p>`;
+  return `<div class="sigs">${rows.map(([k, e]) => {
+    const label = side === "S" ? `${k[0].toUpperCase()}${k.slice(1)} …` : `… ${k}`;
+    return `<span class="sig ${kind}" title="Cả ${COURSE_Q.length} câu: đúng ${e.a}, sai ${e.n - e.a}">${kind === "drop" ? "✕" : "✓"} ${esc(label)} <small>${e.a}/${e.n}</small></span>`;
+  }).join("")}</div>`;
+}
+function cEdgeCard() {
+  const s = cEdgeStats();
+  return `<section class="card sigcard edge"><h2>⚡ Nhìn 2–3 từ đầu / cuối phương án</h2><p class="sub">Áp dụng cho tất cả các chương. Chỉ giữ cụm xuất hiện từ ${C_EDGE_MIN} lần trở lên và <b>đúng 100%</b> hoặc <b>sai 100%</b> trong cả ${COURSE_Q.length} câu. Số nhỏ = số lần đúng / tổng số lần xuất hiện.</p>
+    <p class="edgelbl">Mở đầu → chọn (đúng 100%)</p>${cEdgeTable(s.S.ok, "pick", "S")}
+    <p class="edgelbl">Mở đầu → loại (sai 100%)</p>${cEdgeTable(s.S.bad, "drop", "S")}
+    <p class="edgelbl">Kết thúc → chọn (đúng 100%)</p>${cEdgeTable(s.E.ok, "pick", "E")}
+    <p class="edgelbl">Kết thúc → loại (sai 100%)</p>${cEdgeTable(s.E.bad, "drop", "E")}</section>`;
 }
 /* Compare options from the END. Shared suffix is yellow; the few
    differing words just before it (or the last few words if there is
@@ -726,6 +771,7 @@ function courseHome() {
     </div></div>
     <main class="wrap start">
       <section><h2>Chọn chương</h2><div class="setgrid">${COURSE_CH.map(c => { const st = cSumStatus(c.lessons, cChapterNs(c.id).length); return `<button class="setcard" ${cAttr({ v: "ch", c: c.id })}><b>Chương ${c.id}</b><span class="setstat ${st.cls}">${st.text}</span><span class="setscen">${esc(c.title)}</span></button>`; }).join("")}</div></section>
+      ${cEdgeCard()}
       <div class="note"><b>Cách học.</b> Đọc quy tắc của chương, làm bài câu dễ rồi tới câu khó. Sau khi trả lời, chỉ tô đáp án đúng, một cụm <b>khoảng 4–6 chữ có nghĩa</b>: nếu phần đầu đáp án đúng <b>không trùng với bất kỳ đáp án nào khác trong cả khóa</b> (khoảng ${COURSE_Q.reduce((s, q) => s + q.o.length, 0)} đáp án) thì nhớ cụm đầu (dòng "Nhớ đầu:", ví dụ "Define the purpose of the Project"); nếu không thì nhớ cụm đuôi (dòng "Nhớ đuôi:", ví dụ "verify the figure in the primary source"). Phương án sai không được tô, không bôi vàng cụm đầu chung. Mỗi lần vào một bài, bài đó được làm lại từ đầu (đảo câu và đáp án); kết quả lần gần nhất của từng bài được lưu trong trình duyệt này. Nút "Học tiếp" quay lại đúng chỗ đang làm dở.</div>
     </main>`;
 }
